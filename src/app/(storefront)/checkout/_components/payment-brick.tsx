@@ -2,8 +2,27 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { initMercadoPago, Payment } from "@mercadopago/sdk-react";
+import dynamic from "next/dynamic";
 import { Loader2, AlertTriangle } from "lucide-react";
+
+// Force the Payment Brick component to load ONLY on the client. The MP SDK
+// touches `window` and registers globals when imported, which fails during
+// Next.js server rendering and (per MP support guidance) can also surface as
+// strange CORS / preflight failures when the SDK initialises in a non-browser
+// context. Wrapping with next/dynamic({ ssr: false }) guarantees the import
+// only happens in the browser.
+const Payment = dynamic(
+  () => import("@mercadopago/sdk-react").then((m) => m.Payment),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        Cargando formulario de pago...
+      </div>
+    ),
+  },
+);
 
 type Props = {
   orderId: string;
@@ -20,18 +39,23 @@ export function PaymentBrick({ orderId, total, publicKey, email }: Props) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    if (!mpInitialised && publicKey) {
+    if (mpInitialised || !publicKey) return;
+    let cancelled = false;
+    // Dynamic import so initMercadoPago is also browser-only.
+    import("@mercadopago/sdk-react").then(({ initMercadoPago }) => {
+      if (cancelled) return;
       initMercadoPago(publicKey, { locale: "es-MX" });
       mpInitialised = true;
-      // Diagnostic: log the public key prefix so it's easy to confirm which
-      // set of credentials Bricks is loading. Real keys are never logged.
       const prefix = publicKey.startsWith("TEST-")
         ? "TEST"
         : publicKey.startsWith("APP_USR-")
           ? "APP_USR (prod)"
           : "unknown";
       console.info(`[mp] Bricks initialised with ${prefix} public key`);
-    }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [publicKey]);
 
   if (!publicKey) {
@@ -59,35 +83,25 @@ export function PaymentBrick({ orderId, total, publicKey, email }: Props) {
           amount: total,
           payer: {
             email,
-            // Required for some payment methods (OXXO, ATM). MP expects
-            // "individual" or "association"; default to individual.
             entityType: "individual",
           },
         }}
         customization={{
-          // For Mexico without a wallet preference the Payment Brick supports
-          // cards + cash tickets (OXXO) + ATM. `bankTransfer` and `mercadoPago`
-          // need extra setup (preferenceId) and were producing warnings.
           paymentMethods: {
             creditCard: "all",
             debitCard: "all",
             ticket: "all",
             atm: "all",
           },
-          visual: {
-            style: { theme: "default" },
-          },
+          visual: { style: { theme: "default" } },
         }}
         onReady={() => setReady(true)}
         onError={(err) => {
           console.error("[brick] error:", err);
           const e = err as { cause?: string; message?: string; type?: string };
-          // Always show feedback when token creation fails — even if MP marks
-          // it as "non_critical", from the user's perspective the click did
-          // nothing, which is worse than seeing an error.
           if (e?.cause === "secure_fields_card_token_creation_failed") {
             setError(
-              "El navegador no pudo enviar los datos de la tarjeta a MercadoPago. Verificamos con curl que las credenciales y la tarjeta son válidas — el problema es del lado del navegador. Causas comunes: (1) ad blocker / extensión de privacidad, (2) los campos del formulario no se llenaron correctamente, (3) algún plugin de seguridad. Prueba en ventana de incógnito sin extensiones.",
+              "MercadoPago rechazó la tokenización de la tarjeta. Posibles causas: (1) ad blocker / extensión bloqueando el iframe de MP, (2) la cuenta de MP necesita habilitar Bricks en panel, (3) limitación temporal. Prueba en incógnito sin extensiones. Si persiste, abre un ticket con MP soporte mencionando este public key.",
             );
             return;
           }

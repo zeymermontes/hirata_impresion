@@ -35,6 +35,11 @@ export type HomeSectionType =
   | "custom_html";
 export type ProductStatus = "draft" | "active" | "archived";
 export type DiscountType = "percent" | "amount";
+export type PromotionRuleType =
+  | "free_shipping"
+  | "percent_off"
+  | "amount_off";
+export type PromotionRuleScope = "all" | "products" | "categories";
 
 type Table<R, I = R, U = Partial<I>> = {
   Row: R;
@@ -333,6 +338,8 @@ export interface Database {
           tracking_number: string | null;
           carrier: string | null;
           notes: string | null;
+          discount_amount: number;
+          applied_promotions: Json | null;
           created_at: string;
           updated_at: string;
         },
@@ -352,6 +359,8 @@ export interface Database {
           tracking_number?: string | null;
           carrier?: string | null;
           notes?: string | null;
+          discount_amount?: number;
+          applied_promotions?: Json | null;
           created_at?: string;
           updated_at?: string;
         }
@@ -420,6 +429,60 @@ export interface Database {
           key: string;
           value: Json;
           updated_at?: string;
+        }
+      >;
+      promotion_rules: Table<
+        {
+          id: string;
+          name: string;
+          label: string;
+          description: string | null;
+          type: PromotionRuleType;
+          discount_value: number;
+          min_subtotal: number | null;
+          scope: PromotionRuleScope;
+          starts_at: string | null;
+          ends_at: string | null;
+          sort_order: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          name: string;
+          label: string;
+          description?: string | null;
+          type: PromotionRuleType;
+          discount_value?: number;
+          min_subtotal?: number | null;
+          scope?: PromotionRuleScope;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        }
+      >;
+      promotion_rule_products: Table<
+        {
+          promotion_rule_id: string;
+          product_id: string;
+        },
+        {
+          promotion_rule_id: string;
+          product_id: string;
+        }
+      >;
+      promotion_rule_categories: Table<
+        {
+          promotion_rule_id: string;
+          category_id: string;
+        },
+        {
+          promotion_rule_id: string;
+          category_id: string;
         }
       >;
     };

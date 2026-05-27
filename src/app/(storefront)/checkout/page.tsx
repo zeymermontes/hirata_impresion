@@ -6,6 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { CheckoutClient } from "@/app/(storefront)/checkout/_components/checkout-client";
 import { requireUser } from "@/lib/auth";
 import { getCart } from "@/lib/cart";
+import { getActivePromotionRules } from "@/lib/promotions";
 
 export const metadata = { title: "Checkout" };
 export const dynamic = "force-dynamic";
@@ -20,20 +21,30 @@ export default async function CheckoutPage() {
     id: string;
     quantity: number;
     unit_price: number;
-    products: { name: string; images: unknown } | null;
+    product_id: string;
+    products: {
+      name: string;
+      images: unknown;
+      category_id: string | null;
+    } | null;
     product_variants: { name: string } | null;
   };
   const { data: itemsRaw } = await cart.supabase
     .from("cart_items")
     .select(
-      "id, quantity, unit_price, products(name, images), product_variants(name)",
+      "id, quantity, unit_price, product_id, products!product_id(name, images, category_id), product_variants(name)",
     )
     .eq("cart_id", cart.cartId)
     .order("created_at", { ascending: false });
   const items = (itemsRaw ?? []) as unknown as CartRow[];
   if (items.length === 0) return <EmptyCart />;
 
-  const [{ data: addresses }, { data: branches }] = await Promise.all([
+  const [
+    { data: addresses },
+    { data: branches },
+    { data: extraCategoryLinks },
+    promotionRules,
+  ] = await Promise.all([
     supabase
       .from("addresses")
       .select("*")
@@ -45,10 +56,25 @@ export default async function CheckoutPage() {
       .select("id, name, address, city, hours")
       .eq("active", true)
       .order("name"),
+    cart.supabase
+      .from("product_categories")
+      .select("product_id, category_id")
+      .in(
+        "product_id",
+        items.map((i) => i.product_id),
+      ),
+    getActivePromotionRules(),
   ]);
 
   if ((addresses?.length ?? 0) === 0 && (branches?.length ?? 0) === 0) {
     redirect("/mi-cuenta/direcciones");
+  }
+
+  const extraCatsByProduct = new Map<string, string[]>();
+  for (const link of extraCategoryLinks ?? []) {
+    const arr = extraCatsByProduct.get(link.product_id) ?? [];
+    arr.push(link.category_id);
+    extraCatsByProduct.set(link.product_id, arr);
   }
 
   const clientItems = items.map((i) => {
@@ -57,11 +83,14 @@ export default async function CheckoutPage() {
       : [];
     return {
       id: i.id,
+      product_id: i.product_id,
       quantity: Number(i.quantity),
       unit_price: Number(i.unit_price),
       product_name: i.products?.name ?? "Producto",
       variant_name: i.product_variants?.name ?? null,
       image_url: imgs[0] ?? null,
+      category_id: i.products?.category_id ?? null,
+      additional_category_ids: extraCatsByProduct.get(i.product_id) ?? [],
     };
   });
 
@@ -73,6 +102,7 @@ export default async function CheckoutPage() {
           items={clientItems}
           addresses={addresses ?? []}
           branches={branches ?? []}
+          promotionRules={promotionRules}
         />
       </div>
     </div>

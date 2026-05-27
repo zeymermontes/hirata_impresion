@@ -19,6 +19,10 @@ import {
   formatOrderDate,
 } from "@/lib/order-status";
 import { getTrackingUrl } from "@/lib/shipping-carriers";
+import {
+  OrderAppliedPromotions,
+  parseAppliedPromotions,
+} from "@/app/(storefront)/_components/order-promotions";
 
 export const metadata = { title: "Pedido" };
 export const dynamic = "force-dynamic";
@@ -155,20 +159,39 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
               </li>
             ))}
           </ul>
-          <div className="space-y-1 border-t border-border pt-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatMXN(Number(order.subtotal))}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Envío</span>
-              <span>{formatMXN(Number(order.shipping_cost))}</span>
-            </div>
-            <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
-              <span>Total</span>
-              <span>{formatMXN(Number(order.total))}</span>
-            </div>
-          </div>
+          {(() => {
+            const appliedPromos = parseAppliedPromotions(
+              order.applied_promotions,
+            );
+            const discount = Number(order.discount_amount ?? 0);
+            return (
+              <div className="space-y-2 border-t border-border pt-3 text-sm">
+                {appliedPromos.length > 0 ? (
+                  <OrderAppliedPromotions applied={appliedPromos} />
+                ) : null}
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>{formatMXN(Number(order.subtotal))}</span>
+                  </div>
+                  {discount > 0 ? (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Descuentos</span>
+                      <span className="font-medium">-{formatMXN(discount)}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Envío</span>
+                    <span>{formatMXN(Number(order.shipping_cost))}</span>
+                  </div>
+                  <div className="flex justify-between border-t border-border pt-2 text-base font-semibold">
+                    <span>Total</span>
+                    <span>{formatMXN(Number(order.total))}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </CardContent>
       </Card>
 

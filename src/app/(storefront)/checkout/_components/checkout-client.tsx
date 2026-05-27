@@ -9,10 +9,12 @@ import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { PromotionsSummary } from "@/app/(storefront)/_components/promotions-summary";
 import {
   createOrderAction,
   type CreateOrderState,
 } from "@/app/(storefront)/checkout/actions";
+import { evaluatePromotions, type PromotionRule } from "@/lib/promotions";
 import { cn, formatMXN } from "@/lib/utils";
 
 // Keep in sync with SHIPPING_FLAT_MXN in actions.ts — duplicated here so the
@@ -42,20 +44,29 @@ type Branch = {
 
 type CartItem = {
   id: string;
+  product_id: string;
   quantity: number;
   unit_price: number;
   product_name: string;
   variant_name: string | null;
   image_url: string | null;
+  category_id: string | null;
+  additional_category_ids: string[];
 };
 
 type Props = {
   items: CartItem[];
   addresses: Address[];
   branches: Branch[];
+  promotionRules: PromotionRule[];
 };
 
-export function CheckoutClient({ items, addresses, branches }: Props) {
+export function CheckoutClient({
+  items,
+  addresses,
+  branches,
+  promotionRules,
+}: Props) {
   const [state, formAction] = useActionState<
     CreateOrderState | undefined,
     FormData
@@ -72,8 +83,25 @@ export function CheckoutClient({ items, addresses, branches }: Props) {
     (acc, i) => acc + Number(i.unit_price) * Number(i.quantity),
     0,
   );
-  const shipping = fulfillment === "ship" ? SHIPPING_FLAT_MXN : 0;
-  const total = subtotal + shipping;
+  const rawShipping = fulfillment === "ship" ? SHIPPING_FLAT_MXN : 0;
+
+  // Evaluate promotions against the current cart + fulfillment-selected
+  // shipping cost. The same engine runs again on the server when the order is
+  // created — we just preview here.
+  const promos = evaluatePromotions(
+    promotionRules,
+    items.map((i) => ({
+      product_id: i.product_id,
+      category_id: i.category_id,
+      additional_category_ids: i.additional_category_ids,
+      quantity: i.quantity,
+      unit_price: i.unit_price,
+    })),
+    rawShipping,
+  );
+  const shipping = promos.free_shipping ? 0 : rawShipping;
+  const subtotalDiscount = promos.total_discount - (promos.free_shipping ? rawShipping : 0);
+  const total = subtotal + shipping - subtotalDiscount;
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
@@ -93,9 +121,12 @@ export function CheckoutClient({ items, addresses, branches }: Props) {
       <Summary
         items={items}
         subtotal={subtotal}
+        rawShipping={rawShipping}
         shipping={shipping}
+        subtotalDiscount={subtotalDiscount}
         total={total}
         fulfillment={fulfillment}
+        promos={promos}
       />
     </div>
   );
@@ -272,16 +303,23 @@ function ShippingForm({
 function Summary({
   items,
   subtotal,
+  rawShipping,
   shipping,
+  subtotalDiscount,
   total,
   fulfillment,
+  promos,
 }: {
   items: CartItem[];
   subtotal: number;
+  rawShipping: number;
   shipping: number;
+  subtotalDiscount: number;
   total: number;
   fulfillment: "ship" | "pickup";
+  promos: ReturnType<typeof evaluatePromotions>;
 }) {
+  void rawShipping;
   return (
     <Card className="h-fit lg:sticky lg:top-24">
       <CardContent className="space-y-4 p-6">
@@ -316,11 +354,18 @@ function Summary({
             </li>
           ))}
         </ul>
+        <PromotionsSummary result={promos} />
         <div className="space-y-2 border-t border-border pt-3 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
             <span className="font-medium">{formatMXN(subtotal)}</span>
           </div>
+          {subtotalDiscount > 0 ? (
+            <div className="flex justify-between text-emerald-700">
+              <span>Descuentos</span>
+              <span className="font-medium">-{formatMXN(subtotalDiscount)}</span>
+            </div>
+          ) : null}
           <div className="flex justify-between">
             <span className="text-muted-foreground">
               Envío

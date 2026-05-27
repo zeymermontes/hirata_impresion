@@ -70,8 +70,18 @@ export async function POST(req: NextRequest) {
   try {
     payment = await mpPayment().get({ id: paymentId });
   } catch (e) {
+    const err = e as { status?: number; error?: string; message?: string };
+    // 404 = the payment id doesn't exist. MP's "Simular" feature in the
+    // dashboard sends a fake id (e.g. 123456) to verify reachability —
+    // returning 200 here lets that check pass and avoids infinite retries.
+    if (err?.status === 404 || err?.error === "not_found") {
+      console.info(
+        `[mp/webhook] payment ${paymentId} not found, treating as test ping`,
+      );
+      return NextResponse.json({ ok: true, payment_not_found: true });
+    }
     console.error("[mp/webhook] could not fetch payment:", e);
-    // Return 500 so MP retries. Could be a transient network issue.
+    // For transient errors (5xx, network) return 500 so MP retries.
     return NextResponse.json(
       { error: "Could not fetch payment from MP" },
       { status: 500 },

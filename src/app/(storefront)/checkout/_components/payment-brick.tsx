@@ -92,8 +92,33 @@ export function PaymentBrick({ orderId, total, publicKey, email }: Props) {
             debitCard: "all",
             ticket: "all",
             atm: "all",
+            bankTransfer: "all",
+            mercadoPago: "all",
           },
-          visual: { style: { theme: "default" } },
+          visual: {
+            style: {
+              theme: "default",
+              // The MP SDK's TS types list a narrow subset of customVariables
+              // — these `form*` / `inputBackgroundColor` keys are documented
+              // and work at runtime but aren't in the typings. Cast to keep
+              // structural parity with the upstream fork.
+              customVariables: {
+                baseColor: "#facc15",
+                baseColorFirstVariant: "#e1b813",
+                baseColorSecondVariant: "#c8a311",
+                successColor: "#10b981",
+                errorColor: "#ef4444",
+                outlinePrimaryColor: "#facc15",
+                buttonTextColor: "#ffffff",
+                borderRadiusLarge: "0.75rem",
+                borderRadiusMedium: "0.5rem",
+                borderRadiusSmall: "0.375rem",
+                formInputsTextColor: "#0a0a0a",
+                formLabelTextColor: "#0a0a0a",
+                inputBackgroundColor: "#ffffff",
+              } as Record<string, string>,
+            },
+          },
         }}
         onReady={() => setReady(true)}
         onError={(err) => {

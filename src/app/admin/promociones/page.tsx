@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { Plus, Sparkles, Truck, Percent, BadgeDollarSign } from "lucide-react";
+import {
+  Plus,
+  Sparkles,
+  Truck,
+  Percent,
+  BadgeDollarSign,
+  Gift,
+} from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { DeleteButton } from "@/components/admin/delete-button";
@@ -29,6 +36,7 @@ const TYPE_ICON = {
   free_shipping: Truck,
   percent_off: Percent,
   amount_off: BadgeDollarSign,
+  buy_x_get_y: Gift,
 } as const;
 
 export default async function PromotionsAdminPage() {
@@ -104,12 +112,21 @@ export default async function PromotionsAdminPage() {
                         ? "—"
                         : r.type === "percent_off"
                           ? `${Number(r.discount_value)}%`
-                          : formatMXN(Number(r.discount_value))}
+                          : r.type === "buy_x_get_y"
+                            ? `${r.buy_x ?? "?"}x${Number(r.discount_value)}`
+                            : formatMXN(Number(r.discount_value))}
                     </TableCell>
-                    <TableCell>
-                      {r.min_subtotal === null
-                        ? "—"
-                        : formatMXN(Number(r.min_subtotal))}
+                    <TableCell className="text-xs">
+                      {(() => {
+                        const parts: string[] = [];
+                        if (r.min_subtotal !== null) {
+                          parts.push(formatMXN(Number(r.min_subtotal)));
+                        }
+                        if (r.buy_x && r.type !== "buy_x_get_y") {
+                          parts.push(`${r.buy_x} uds`);
+                        }
+                        return parts.length === 0 ? "—" : parts.join(" · ");
+                      })()}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {formatWindow(r.starts_at, r.ends_at)}

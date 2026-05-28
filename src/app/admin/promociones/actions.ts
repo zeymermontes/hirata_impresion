@@ -11,11 +11,21 @@ const PromotionSchema = z
     name: z.string().min(2),
     label: z.string().min(2),
     description: z.string().optional().nullable(),
-    type: z.enum(["free_shipping", "percent_off", "amount_off"]),
+    type: z.enum([
+      "free_shipping",
+      "percent_off",
+      "amount_off",
+      "buy_x_get_y",
+    ]),
     discount_value: z.coerce.number().min(0),
     min_subtotal: z
       .union([z.literal(""), z.coerce.number().nonnegative()])
       .transform((v) => (v === "" ? null : v))
+      .nullable()
+      .optional(),
+    buy_x: z
+      .union([z.literal(""), z.coerce.number().int().min(0)])
+      .transform((v) => (v === "" || v === 0 ? null : v))
       .nullable()
       .optional(),
     scope: z.enum(["all", "products", "categories"]),
@@ -39,6 +49,20 @@ const PromotionSchema = z
       message: "Ingresa un monto mayor a 0",
       path: ["discount_value"],
     },
+  )
+  .refine(
+    (v) => v.type !== "buy_x_get_y" || (v.buy_x != null && v.buy_x >= 2),
+    {
+      message: "Para 'Compra X lleva Y' el mínimo X debe ser al menos 2",
+      path: ["buy_x"],
+    },
+  )
+  .refine(
+    (v) => v.type !== "buy_x_get_y" || v.discount_value >= 1,
+    {
+      message: "Para 'Compra X lleva Y' Y debe ser al menos 1",
+      path: ["discount_value"],
+    },
   );
 
 export type PromotionActionState = {
@@ -58,6 +82,10 @@ function parseForm(formData: FormData) {
       formData.get("min_subtotal") === ""
         ? ""
         : formData.get("min_subtotal"),
+    buy_x:
+      formData.get("buy_x") === null || formData.get("buy_x") === ""
+        ? ""
+        : formData.get("buy_x"),
     scope: formData.get("scope") || "all",
     starts_at: formData.get("starts_at") || null,
     ends_at: formData.get("ends_at") || null,
@@ -136,6 +164,7 @@ export async function createPromotionAction(
         type: parsed.data.type,
         discount_value: parsed.data.discount_value,
         min_subtotal: parsed.data.min_subtotal ?? null,
+        buy_x: parsed.data.buy_x ?? null,
         scope: parsed.data.scope,
         starts_at: parsed.data.starts_at || null,
         ends_at: parsed.data.ends_at || null,
@@ -175,6 +204,7 @@ export async function updatePromotionAction(
         type: parsed.data.type,
         discount_value: parsed.data.discount_value,
         min_subtotal: parsed.data.min_subtotal ?? null,
+        buy_x: parsed.data.buy_x ?? null,
         scope: parsed.data.scope,
         starts_at: parsed.data.starts_at || null,
         ends_at: parsed.data.ends_at || null,

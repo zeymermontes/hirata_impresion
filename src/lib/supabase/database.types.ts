@@ -38,7 +38,8 @@ export type DiscountType = "percent" | "amount" | "free_shipping";
 export type PromotionRuleType =
   | "free_shipping"
   | "percent_off"
-  | "amount_off";
+  | "amount_off"
+  | "buy_x_get_y";
 export type PromotionRuleScope = "all" | "products" | "categories";
 
 type Table<R, I = R, U = Partial<I>> = {
@@ -446,6 +447,7 @@ export interface Database {
           type: PromotionRuleType;
           discount_value: number;
           min_subtotal: number | null;
+          buy_x: number | null;
           scope: PromotionRuleScope;
           starts_at: string | null;
           ends_at: string | null;
@@ -462,6 +464,7 @@ export interface Database {
           type: PromotionRuleType;
           discount_value?: number;
           min_subtotal?: number | null;
+          buy_x?: number | null;
           scope?: PromotionRuleScope;
           starts_at?: string | null;
           ends_at?: string | null;

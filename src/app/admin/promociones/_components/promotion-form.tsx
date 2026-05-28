@@ -20,9 +20,10 @@ type PromotionRule = {
   name: string;
   label: string;
   description: string | null;
-  type: "free_shipping" | "percent_off" | "amount_off";
+  type: "free_shipping" | "percent_off" | "amount_off" | "buy_x_get_y";
   discount_value: number;
   min_subtotal: number | null;
+  buy_x: number | null;
   scope: "all" | "products" | "categories";
   starts_at: string | null;
   ends_at: string | null;
@@ -129,6 +130,7 @@ export function PromotionForm({
             <option value="free_shipping">Envío gratis</option>
             <option value="percent_off">% de descuento</option>
             <option value="amount_off">Descuento fijo ($)</option>
+            <option value="buy_x_get_y">Compra X lleva Y gratis</option>
           </Select>
         </div>
         <div className="grid gap-1.5">
@@ -137,14 +139,18 @@ export function PromotionForm({
               ? "Valor (no aplica)"
               : type === "percent_off"
                 ? "Porcentaje (0-100)"
-                : "Monto ($)"}
+                : type === "amount_off"
+                  ? "Monto ($)"
+                  : "Unidades gratis (Y)"}
           </Label>
           <Input
             id="discount_value"
             name="discount_value"
             type="number"
-            step={type === "percent_off" ? "1" : "0.01"}
-            min="0"
+            step={
+              type === "percent_off" || type === "buy_x_get_y" ? "1" : "0.01"
+            }
+            min={type === "buy_x_get_y" ? "1" : "0"}
             max={type === "percent_off" ? "100" : undefined}
             defaultValue={rule?.discount_value ?? 0}
             disabled={type === "free_shipping"}
@@ -167,6 +173,32 @@ export function PromotionForm({
             placeholder="Sin mínimo"
           />
         </div>
+      </div>
+
+      <div className="grid gap-1.5 sm:max-w-xs">
+        <Label htmlFor="buy_x">
+          {type === "buy_x_get_y"
+            ? "Compra mínima (X unidades)"
+            : "Cantidad mínima de unidades"}
+        </Label>
+        <Input
+          id="buy_x"
+          name="buy_x"
+          type="number"
+          step="1"
+          min={type === "buy_x_get_y" ? "2" : "0"}
+          defaultValue={rule?.buy_x ?? ""}
+          placeholder={type === "buy_x_get_y" ? "Ej. 3" : "Sin mínimo"}
+          required={type === "buy_x_get_y"}
+        />
+        {state?.errors?.buy_x?.[0] ? (
+          <p className="text-xs text-destructive">{state.errors.buy_x[0]}</p>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          {type === "buy_x_get_y"
+            ? "Por cada X unidades en el alcance, el cliente se lleva Y gratis."
+            : "Si lo dejas vacío, no hay restricción de cantidad. Cuenta solo las unidades dentro del alcance elegido."}
+        </p>
       </div>
 
       <fieldset className="space-y-3 rounded-md border border-border bg-muted/30 p-4">

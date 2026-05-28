@@ -31,19 +31,34 @@ export function PromotionsSummary({
         </div>
       ))}
 
-      {almost.map((p) => (
-        <div
-          key={p.rule.id}
-          className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"
-        >
-          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          <span>
-            Faltan{" "}
-            <strong>{formatMXN(p.missing_to_qualify ?? 0)}</strong> para{" "}
-            <span className="font-medium">{p.rule.label}</span>
-          </span>
-        </div>
-      ))}
+      {almost.map((p) => {
+        const missing = p.missing_to_qualify ?? 0;
+        const isQty = p.missing_type === "quantity";
+        return (
+          <div
+            key={p.rule.id}
+            className="flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900"
+          >
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>
+              {isQty ? (
+                <>
+                  Agrega{" "}
+                  <strong>
+                    {missing} {missing === 1 ? "unidad" : "unidades"}
+                  </strong>{" "}
+                  más para{" "}
+                </>
+              ) : (
+                <>
+                  Faltan <strong>{formatMXN(missing)}</strong> para{" "}
+                </>
+              )}
+              <span className="font-medium">{p.rule.label}</span>
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

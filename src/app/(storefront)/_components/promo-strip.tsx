@@ -43,9 +43,25 @@ export async function PromoStrip() {
         <Sparkles className="h-3.5 w-3.5 shrink-0" />
         {closest ? (
           <span>
-            Te faltan{" "}
-            <strong>{formatMXN(closest.missing_to_qualify ?? 0)}</strong>{" "}
-            para <span>{closest.rule.label}</span>
+            {closest.missing_type === "quantity" ? (
+              <>
+                Agrega{" "}
+                <strong>
+                  {closest.missing_to_qualify ?? 0}{" "}
+                  {(closest.missing_to_qualify ?? 0) === 1
+                    ? "unidad"
+                    : "unidades"}
+                </strong>{" "}
+                para
+              </>
+            ) : (
+              <>
+                Te faltan{" "}
+                <strong>{formatMXN(closest.missing_to_qualify ?? 0)}</strong>{" "}
+                para
+              </>
+            )}{" "}
+            <span>{closest.rule.label}</span>
           </span>
         ) : (
           <span className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">

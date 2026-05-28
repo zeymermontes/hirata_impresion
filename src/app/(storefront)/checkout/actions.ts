@@ -214,6 +214,7 @@ export async function createOrderAction(
                   : "free_shipping",
             discount_value: appliedCode.promo.value,
             min_subtotal: appliedCode.promo.min_subtotal,
+            buy_x: null,
             scope: "all",
             starts_at: appliedCode.promo.starts_at,
             ends_at: appliedCode.promo.ends_at,

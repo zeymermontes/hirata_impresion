@@ -74,6 +74,7 @@ export function evaluatePromoCode(
       type: discountTypeToRuleType(promo.discount_type),
       discount_value: promo.value,
       min_subtotal: promo.min_subtotal,
+      buy_x: null,
       scope: "all",
       starts_at: promo.starts_at,
       ends_at: promo.ends_at,

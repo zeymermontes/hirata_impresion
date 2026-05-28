@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { ImageUpload } from "@/components/image-upload";
 import {
   addSectionAction,
   updateSectionAction,
@@ -156,7 +157,93 @@ function TypeConfigFields({
       </div>
     );
   }
-  // hero_banners / banner_strip use a fixed config built server-side.
+  if (type === "hero_banners") {
+    return (
+      <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+        <p className="text-xs text-muted-foreground">
+          Configura el bloque principal de la landing. Si dejas la imagen
+          vacía, se usa el primer banner activo de la sección{" "}
+          <strong>Banners</strong> con posición <em>hero</em>.
+        </p>
+        <div className="grid gap-1.5">
+          <Label htmlFor="hero_title">Título</Label>
+          <Input
+            id="hero_title"
+            name="hero_title"
+            defaultValue={String(initial.title ?? "")}
+            placeholder="Ej. Imprime lo que imaginas, sin mínimos."
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="hero_subtitle">Subtítulo / descripción</Label>
+          <Textarea
+            id="hero_subtitle"
+            name="hero_subtitle"
+            rows={2}
+            defaultValue={String(initial.subtitle ?? "")}
+            placeholder="Ej. Lonas, vinilos, papelería y rotulación…"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>Imagen del hero (opcional)</Label>
+          <ImageUpload
+            name="hero_image_url"
+            defaultValue={String(initial.image_url ?? "")}
+            folder="home"
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="hero_primary_label">Botón principal · texto</Label>
+            <Input
+              id="hero_primary_label"
+              name="hero_primary_label"
+              defaultValue={String(initial.primary_label ?? "")}
+              placeholder="Ver productos"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="hero_primary_href">Botón principal · destino</Label>
+            <Input
+              id="hero_primary_href"
+              name="hero_primary_href"
+              defaultValue={String(initial.primary_href ?? "")}
+              placeholder="/productos"
+            />
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="hero_secondary_label">
+              Botón secundario · texto
+            </Label>
+            <Input
+              id="hero_secondary_label"
+              name="hero_secondary_label"
+              defaultValue={String(initial.secondary_label ?? "")}
+              placeholder="Pedir cotización"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="hero_secondary_href">
+              Botón secundario · destino
+            </Label>
+            <Input
+              id="hero_secondary_href"
+              name="hero_secondary_href"
+              defaultValue={String(initial.secondary_href ?? "")}
+              placeholder="/contacto"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Para esconder un botón, déjalo sin texto. Los destinos pueden ser
+          rutas internas (<code>/productos</code>) o URLs externas.
+        </p>
+      </div>
+    );
+  }
+  // banner_strip uses banners from the dedicated table.
   return (
     <p className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
       Esta sección lee de la tabla de banners. Administra qué banners aparecen

@@ -86,7 +86,7 @@ export default async function AdminLayout({
         </form>
       </aside>
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-border bg-background px-6">
           <h1 className="text-sm text-muted-foreground">
             Conectado como{" "}
@@ -101,7 +101,7 @@ export default async function AdminLayout({
             Ver tienda →
           </Link>
         </header>
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   );

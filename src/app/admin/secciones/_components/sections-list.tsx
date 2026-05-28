@@ -175,9 +175,9 @@ function SectionRow({
         <GripVertical className="h-4 w-4" />
       </button>
 
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">
+          <span className="truncate font-medium">
             {section.title ?? SECTION_TYPE_LABEL[section.type]}
           </span>
           <Badge variant="muted">{SECTION_TYPE_LABEL[section.type]}</Badge>
@@ -232,13 +232,25 @@ function SectionRow({
   );
 }
 
+// Keys that are internal plumbing — hide from the summary so the line
+// stays focused on what the admin actually edited.
+const HIDDEN_CONFIG_KEYS = new Set(["position"]);
+
 function ConfigSummary({ config }: { config: Record<string, unknown> }) {
-  const entries = Object.entries(config);
+  const entries = Object.entries(config).filter(([k, v]) => {
+    if (HIDDEN_CONFIG_KEYS.has(k)) return false;
+    if (v === null || v === undefined) return false;
+    if (typeof v === "string" && v.trim().length === 0) return false;
+    return true;
+  });
   if (entries.length === 0) return null;
   return (
     <p className="mt-0.5 truncate text-xs text-muted-foreground">
       {entries
-        .map(([k, v]) => `${k}=${typeof v === "string" && v.length > 40 ? v.slice(0, 40) + "…" : String(v)}`)
+        .map(
+          ([k, v]) =>
+            `${k}=${typeof v === "string" && v.length > 40 ? v.slice(0, 40) + "…" : String(v)}`,
+        )
         .join(" · ")}
     </p>
   );

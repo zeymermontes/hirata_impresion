@@ -28,8 +28,24 @@ export type SectionActionState = {
 
 function buildConfig(type: string, formData: FormData): Record<string, unknown> {
   switch (type) {
-    case "hero_banners":
-      return { position: "hero" };
+    case "hero_banners": {
+      // Persist empty strings as undefined so the landing's fallback logic
+      // (config -> banner row) can detect "not configured".
+      const str = (key: string) => {
+        const v = String(formData.get(key) ?? "").trim();
+        return v.length > 0 ? v : undefined;
+      };
+      return {
+        position: "hero",
+        title: str("hero_title"),
+        subtitle: str("hero_subtitle"),
+        image_url: str("hero_image_url"),
+        primary_label: str("hero_primary_label"),
+        primary_href: str("hero_primary_href"),
+        secondary_label: str("hero_secondary_label"),
+        secondary_href: str("hero_secondary_href"),
+      };
+    }
     case "banner_strip":
       return { position: "strip" };
     case "featured_products": {

@@ -48,3 +48,41 @@ export async function updateContactSettingsAction(
     return { ok: true, message: "Información guardada." };
   });
 }
+
+// ============================================================
+// Privacy policy
+// ============================================================
+
+const PrivacyPolicySchema = z.object({
+  content: z.string().min(10, "El contenido es muy corto"),
+});
+
+export type PrivacyPolicyState = {
+  errors?: Record<string, string[] | undefined>;
+  message?: string;
+  ok?: boolean;
+};
+
+export async function updatePrivacyPolicyAction(
+  _prev: PrivacyPolicyState | undefined,
+  formData: FormData,
+): Promise<PrivacyPolicyState> {
+  return runAction(async () => {
+    const parsed = PrivacyPolicySchema.safeParse({
+      content: formData.get("content"),
+    });
+    if (!parsed.success) {
+      return { errors: z.flattenError(parsed.error).fieldErrors };
+    }
+    const { supabase } = await requireAdmin();
+    const { error } = await supabase.from("site_settings").upsert(
+      { key: "privacy_policy", value: parsed.data },
+      { onConflict: "key" },
+    );
+    if (error) return { message: error.message };
+
+    revalidatePath("/aviso-privacidad");
+    revalidatePath("/admin/configuracion");
+    return { ok: true, message: "Aviso de privacidad actualizado." };
+  });
+}

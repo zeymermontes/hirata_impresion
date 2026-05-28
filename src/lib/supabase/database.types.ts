@@ -442,6 +442,26 @@ export interface Database {
           updated_at?: string;
         }
       >;
+      faq_entries: Table<
+        {
+          id: string;
+          question: string;
+          answer: string;
+          sort_order: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          question: string;
+          answer: string;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        }
+      >;
       promotion_rules: Table<
         {
           id: string;

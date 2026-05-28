@@ -56,3 +56,42 @@ export async function getContactSettings(): Promise<ContactSettings> {
     .maybeSingle();
   return parseContact(data?.value);
 }
+
+// ============================================================
+// Privacy policy
+// ============================================================
+
+export type PrivacyPolicy = {
+  /** Admin-authored HTML body. */
+  content: string;
+  /** ISO timestamp of last update, useful to surface "last updated". */
+  updated_at: string | null;
+};
+
+const PRIVACY_FALLBACK_HTML =
+  "<p>Este aviso de privacidad se publicará pronto.</p>";
+
+function parsePrivacyValue(value: unknown): string {
+  if (!value || typeof value !== "object") return PRIVACY_FALLBACK_HTML;
+  const v = value as Record<string, unknown>;
+  return typeof v.content === "string" && v.content.trim().length > 0
+    ? v.content
+    : PRIVACY_FALLBACK_HTML;
+}
+
+/**
+ * Read the privacy policy from site_settings. Falls back to a placeholder
+ * paragraph if the row isn't there yet.
+ */
+export async function getPrivacyPolicy(): Promise<PrivacyPolicy> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("site_settings")
+    .select("value, updated_at")
+    .eq("key", "privacy_policy")
+    .maybeSingle();
+  return {
+    content: parsePrivacyValue(data?.value),
+    updated_at: data?.updated_at ?? null,
+  };
+}

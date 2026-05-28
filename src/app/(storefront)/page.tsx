@@ -5,6 +5,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn, formatMXN } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/server";
 import type { HomeSectionType } from "@/lib/supabase/database.types";
+import {
+  LandingCarousel,
+  type CarouselSlide,
+} from "@/app/(storefront)/_components/landing-carousel";
 
 export const revalidate = 60;
 
@@ -48,6 +52,8 @@ type PreloadedData = {
   stripBanners: Banner[];
   categories: Category[];
   products: FeaturedProduct[];
+  /** Carousel slides keyed by their owning `home_section_id`. */
+  carouselsBySection: Map<string, CarouselSlide[]>;
 };
 
 // ============================================================
@@ -91,6 +97,9 @@ export default async function HomePage() {
   // share a single query for 12 then each render the slice they need.
   const needsHero = sections.some((s) => s.type === "hero_banners");
   const needsStrip = sections.some((s) => s.type === "banner_strip");
+  const carouselSectionIds = sections
+    .filter((s) => s.type === "carousel")
+    .map((s) => s.id);
   const maxCategories = Math.max(
     0,
     ...sections
@@ -116,6 +125,7 @@ export default async function HomePage() {
     { data: stripBannersRaw },
     { data: categoriesRaw },
     { data: productsRaw },
+    { data: carouselBannersRaw },
   ] = await Promise.all([
     fallbackNeedsHero
       ? supabase
@@ -151,13 +161,45 @@ export default async function HomePage() {
           .order("created_at", { ascending: false })
           .limit(fallbackProductsCount)
       : Promise.resolve({ data: [] as FeaturedProduct[] }),
+    carouselSectionIds.length > 0
+      ? supabase
+          .from("banners")
+          .select(
+            "id, title, subtitle, image_url, link_url, home_section_id, sort_order",
+          )
+          .eq("position", "carousel")
+          .eq("active", true)
+          .in("home_section_id", carouselSectionIds)
+          .order("sort_order", { ascending: true })
+      : Promise.resolve({
+          data: [] as Array<Banner & { home_section_id: string | null }>,
+        }),
   ]);
+
+  // Bucket carousel banners by their owning section so the dispatcher can
+  // look up each carousel's slides in O(1).
+  const carouselsBySection = new Map<string, CarouselSlide[]>();
+  for (const b of (carouselBannersRaw ?? []) as Array<
+    Banner & { home_section_id: string | null }
+  >) {
+    if (!b.home_section_id) continue;
+    const arr = carouselsBySection.get(b.home_section_id) ?? [];
+    arr.push({
+      id: b.id,
+      title: b.title,
+      subtitle: b.subtitle,
+      image_url: b.image_url,
+      link_url: b.link_url,
+    });
+    carouselsBySection.set(b.home_section_id, arr);
+  }
 
   const data: PreloadedData = {
     heroBanners: (heroBannersRaw ?? []) as Banner[],
     stripBanners: (stripBannersRaw ?? []) as Banner[],
     categories: (categoriesRaw ?? []) as Category[],
     products: (productsRaw ?? []) as FeaturedProduct[],
+    carouselsBySection,
   };
 
   // 3. Fallback layout if the admin hasn't configured any sections yet.
@@ -231,6 +273,26 @@ function renderSection(section: SectionRow, data: PreloadedData) {
       );
     case "cta_band":
       return <CtaBand config={section.config} />;
+    case "carousel": {
+      const slides = data.carouselsBySection.get(section.id) ?? [];
+      if (slides.length === 0) return null;
+      // Allow 0 (= disable auto-play). readPositiveInt would silently
+      // fall back to the default for 0, so check explicitly.
+      const rawMs = Number(section.config.autoplay_ms);
+      const autoplayMs =
+        Number.isFinite(rawMs) && rawMs >= 0 ? rawMs : 5000;
+      const showArrows = section.config.show_arrows !== false;
+      const showDots = section.config.show_dots !== false;
+      return (
+        <LandingCarousel
+          slides={slides}
+          autoplayMs={autoplayMs}
+          showArrows={showArrows}
+          showDots={showDots}
+          ariaLabel={section.title ?? undefined}
+        />
+      );
+    }
     default:
       return null;
   }

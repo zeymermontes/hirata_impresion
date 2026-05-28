@@ -129,6 +129,7 @@ export function CategoryForm({ category, parents }: Props) {
         folder="categories"
         label="Imagen de portada (opcional)"
         aspect="video"
+        hint="Recomendado: 800×600 px (4:3). Aparece como tarjeta en el grid de categorías del landing. PNG, JPG o WEBP — máx 5 MB."
       />
 
       <label className="flex items-center gap-2 rounded-md border border-border bg-muted/30 p-3 text-sm">

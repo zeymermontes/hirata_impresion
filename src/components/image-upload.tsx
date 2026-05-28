@@ -15,6 +15,12 @@ type Props = {
   folder?: string;
   label?: string;
   aspect?: "square" | "video" | "wide";
+  /**
+   * Optional small helper text shown under the label (e.g. recommended
+   * dimensions like "1200×900 px (4:3)"). Helps admins pick the right
+   * source file before uploading.
+   */
+  hint?: string;
 };
 
 export function ImageUpload({
@@ -23,6 +29,7 @@ export function ImageUpload({
   folder = "uploads",
   label = "Imagen",
   aspect = "video",
+  hint,
 }: Props) {
   const [url, setUrl] = useState<string>(defaultValue ?? "");
   const [uploading, setUploading] = useState(false);
@@ -59,6 +66,7 @@ export function ImageUpload({
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium">{label}</label>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       <input type="hidden" name={name} value={url} />
 
       {url ? (

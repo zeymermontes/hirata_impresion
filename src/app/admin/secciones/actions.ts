@@ -13,6 +13,7 @@ const SECTION_TYPES = [
   "banner_strip",
   "custom_html",
   "cta_band",
+  "carousel",
 ] as const;
 
 const SectionSchema = z.object({
@@ -69,6 +70,14 @@ function buildConfig(type: string, formData: FormData): Record<string, unknown> 
         subtitle: str("cta_subtitle"),
         button_label: str("cta_button_label"),
         button_href: str("cta_button_href"),
+      };
+    }
+    case "carousel": {
+      const ms = Number(formData.get("carousel_autoplay_ms"));
+      return {
+        autoplay_ms: Number.isFinite(ms) && ms >= 0 ? ms : 5000,
+        show_arrows: formData.get("carousel_show_arrows") === "on",
+        show_dots: formData.get("carousel_show_dots") === "on",
       };
     }
     default:

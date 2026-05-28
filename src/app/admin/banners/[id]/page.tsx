@@ -13,18 +13,34 @@ export default async function EditBannerPage({
 }) {
   const { id } = await params;
   const { supabase } = await requireAdmin();
-  const [{ data: banner }, { data: categories }] = await Promise.all([
-    supabase.from("banners").select("*").eq("id", id).maybeSingle(),
-    supabase.from("categories").select("id, name").order("name"),
-  ]);
+  const [{ data: banner }, { data: categories }, { data: carouselSections }] =
+    await Promise.all([
+      supabase.from("banners").select("*").eq("id", id).maybeSingle(),
+      supabase.from("categories").select("id, name").order("name"),
+      supabase
+        .from("home_sections")
+        .select("id, title")
+        .eq("type", "carousel")
+        .eq("active", true)
+        .order("sort_order", { ascending: true }),
+    ]);
   if (!banner) notFound();
+
+  const carousels = (carouselSections ?? []).map((s) => ({
+    id: s.id,
+    name: s.title?.trim() || "Carrusel sin nombre",
+  }));
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <AdminPageHeader title={banner.title} backHref="/admin/banners" />
       <Card>
         <CardContent className="p-6">
-          <BannerForm banner={banner} categories={categories ?? []} />
+          <BannerForm
+            banner={banner}
+            categories={categories ?? []}
+            carousels={carousels}
+          />
         </CardContent>
       </Card>
     </div>

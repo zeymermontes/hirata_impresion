@@ -26,14 +26,15 @@ export type CustomizationFieldType =
   | "number"
   | "dropdown"
   | "file";
-export type BannerPosition = "hero" | "strip" | "category";
+export type BannerPosition = "hero" | "strip" | "category" | "carousel";
 export type HomeSectionType =
   | "hero_banners"
   | "featured_products"
   | "category_grid"
   | "banner_strip"
   | "custom_html"
-  | "cta_band";
+  | "cta_band"
+  | "carousel";
 export type ProductStatus = "draft" | "active" | "archived";
 export type DiscountType = "percent" | "amount" | "free_shipping";
 export type PromotionRuleType =
@@ -238,6 +239,7 @@ export interface Database {
           starts_at: string | null;
           ends_at: string | null;
           category_id: string | null;
+          home_section_id: string | null;
         },
         {
           id?: string;
@@ -251,6 +253,7 @@ export interface Database {
           starts_at?: string | null;
           ends_at?: string | null;
           category_id?: string | null;
+          home_section_id?: string | null;
         }
       >;
       product_categories: Table<

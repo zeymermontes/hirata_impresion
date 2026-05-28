@@ -21,22 +21,39 @@ type Banner = {
   subtitle: string | null;
   image_url: string;
   link_url: string | null;
-  position: "hero" | "strip" | "category";
+  position: "hero" | "strip" | "category" | "carousel";
   sort_order: number;
   active: boolean;
   starts_at: string | null;
   ends_at: string | null;
   category_id: string | null;
+  home_section_id: string | null;
+};
+
+// Per-position recommended dimensions, derived from the aspect ratios each
+// surface actually uses on the landing/category pages. Keep these in sync
+// with the renderers in `src/app/(storefront)/page.tsx` and the category
+// header.
+const BANNER_IMAGE_HINTS: Record<Banner["position"], string> = {
+  hero: "Recomendado: 1200×900 px (4:3). PNG, JPG o WEBP — máx 5 MB.",
+  strip: "Recomendado: 800×400 px (2:1). PNG, JPG o WEBP — máx 5 MB.",
+  category:
+    "Recomendado: 1600×600 px (~16:6 panorámico). PNG, JPG o WEBP — máx 5 MB.",
+  carousel:
+    "Recomendado: 1920×600 px (16:5 panorámico, full-width). PNG, JPG o WEBP — máx 5 MB.",
 };
 
 type Category = { id: string; name: string };
+type CarouselSection = { id: string; name: string };
 
 export function BannerForm({
   banner,
   categories,
+  carousels,
 }: {
   banner?: Banner;
   categories: Category[];
+  carousels: CarouselSection[];
 }) {
   const action = banner
     ? updateBannerAction.bind(null, banner.id)
@@ -81,7 +98,8 @@ export function BannerForm({
         defaultValue={banner?.image_url}
         folder="banners"
         label="Imagen del banner"
-        aspect="wide"
+        aspect={position === "hero" ? "video" : "wide"}
+        hint={BANNER_IMAGE_HINTS[position]}
       />
       {state?.errors?.image_url?.[0] ? (
         <p className="text-xs text-destructive">{state.errors.image_url[0]}</p>
@@ -110,6 +128,7 @@ export function BannerForm({
             <option value="hero">Hero (principal)</option>
             <option value="strip">Strip (banda de promos)</option>
             <option value="category">Categoría</option>
+            <option value="carousel">Carrusel (asignar a sección)</option>
           </Select>
         </div>
         <div className="grid gap-2">
@@ -149,6 +168,44 @@ export function BannerForm({
               {state.errors.category_id[0]}
             </p>
           ) : null}
+        </div>
+      ) : null}
+
+      {position === "carousel" ? (
+        <div className="grid gap-2">
+          <Label htmlFor="home_section_id">¿En qué carrusel del landing?</Label>
+          {carousels.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
+              Todavía no hay carruseles creados. Ve a{" "}
+              <strong>Landing</strong> y agrega una sección tipo{" "}
+              <em>Carrusel de banners</em> antes de asignar banners aquí.
+            </p>
+          ) : (
+            <>
+              <Select
+                id="home_section_id"
+                name="home_section_id"
+                defaultValue={banner?.home_section_id ?? ""}
+                required
+              >
+                <option value="">— elegir carrusel —</option>
+                {carousels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                El nombre viene del título de la sección. Si necesitas un
+                carrusel nuevo, créalo desde <strong>Landing</strong>.
+              </p>
+              {state?.errors?.home_section_id?.[0] ? (
+                <p className="text-xs text-destructive">
+                  {state.errors.home_section_id[0]}
+                </p>
+              ) : null}
+            </>
+          )}
         </div>
       ) : null}
 

@@ -20,7 +20,8 @@ export type SectionType =
   | "category_grid"
   | "banner_strip"
   | "custom_html"
-  | "cta_band";
+  | "cta_band"
+  | "carousel";
 
 export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
   hero_banners: "Banners principales (hero)",
@@ -29,6 +30,7 @@ export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
   banner_strip: "Banda de promociones",
   custom_html: "HTML personalizado",
   cta_band: "Banda de llamado a la acción (CTA)",
+  carousel: "Carrusel de banners",
 };
 
 export type Section = {
@@ -192,6 +194,7 @@ function TypeConfigFields({
             name="hero_image_url"
             defaultValue={String(initial.image_url ?? "")}
             folder="home"
+            hint="Recomendado: 1200×900 px (4:3). Se muestra en la columna derecha del hero. PNG, JPG o WEBP — máx 5 MB."
           />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -294,6 +297,56 @@ function TypeConfigFields({
         <p className="text-xs text-muted-foreground">
           Deja el texto del botón vacío para esconderlo. El destino puede ser
           una ruta interna (<code>/contacto</code>) o URL externa.
+        </p>
+      </div>
+    );
+  }
+  if (type === "carousel") {
+    return (
+      <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+        <p className="text-xs text-muted-foreground">
+          Carrusel de banners con auto-rotación. Después de crear esta sección,
+          ve a <strong>Banners</strong>, crea uno con posición{" "}
+          <em>carousel</em> y elige esta sección como destino. Cada banner
+          aparece como un slide.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="carousel_autoplay_ms">Auto-rotación (ms)</Label>
+            <Input
+              id="carousel_autoplay_ms"
+              name="carousel_autoplay_ms"
+              type="number"
+              min={0}
+              step={500}
+              defaultValue={Number(initial.autoplay_ms) || 5000}
+              placeholder="5000"
+            />
+          </div>
+          <div className="grid gap-1.5 sm:pt-6">
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="carousel_show_arrows"
+                defaultChecked={initial.show_arrows !== false}
+                className="h-4 w-4 rounded border-input"
+              />
+              Mostrar flechas
+            </label>
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="carousel_show_dots"
+                defaultChecked={initial.show_dots !== false}
+                className="h-4 w-4 rounded border-input"
+              />
+              Mostrar dots
+            </label>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Auto-rotación en milisegundos (5000 = 5s). Pon 0 para desactivar
+          auto-play.
         </p>
       </div>
     );

@@ -11,6 +11,11 @@ type Props = {
   folder?: string;
   label?: string;
   max?: number;
+  /**
+   * Optional helper text shown under the label (e.g. recommended
+   * dimensions). Helps admins prep the right source file.
+   */
+  hint?: string;
 };
 
 export function MultiImageUpload({
@@ -19,6 +24,7 @@ export function MultiImageUpload({
   folder = "uploads",
   label = "Imágenes",
   max = 6,
+  hint,
 }: Props) {
   const [urls, setUrls] = useState<string[]>(defaultValue);
   const [uploading, setUploading] = useState(false);
@@ -59,6 +65,7 @@ export function MultiImageUpload({
   return (
     <div className="space-y-2">
       <label className="block text-sm font-medium">{label}</label>
+      {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       <input type="hidden" name={name} value={JSON.stringify(urls)} />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

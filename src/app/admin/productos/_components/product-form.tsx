@@ -229,6 +229,7 @@ export function ProductForm({
         folder="products"
         label="Imágenes del producto"
         max={6}
+        hint="Recomendado: 1200×1200 px (cuadradas). La primera es la principal del catálogo. PNG, JPG o WEBP — máx 5 MB c/u."
       />
 
       {state?.message ? (

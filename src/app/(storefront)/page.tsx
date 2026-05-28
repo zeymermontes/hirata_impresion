@@ -59,11 +59,21 @@ export default async function HomePage() {
 
   // 1. Pull the section list. Anything not active is filtered out so an admin
   // can pause a section without deleting it.
-  const { data: rawSections } = await supabase
-    .from("home_sections")
-    .select("id, type, title, config, active, sort_order")
-    .eq("active", true)
-    .order("sort_order", { ascending: true });
+  // Pull active rows for rendering, plus a separate count of *any* cta_band
+  // rows (active or inactive) so we can decide whether to keep showing the
+  // legacy hardcoded CTA at the bottom. The hardcoded CTA only renders when
+  // the admin has not yet expressed any preference about it.
+  const [{ data: rawSections }, { count: ctaBandCount }] = await Promise.all([
+    supabase
+      .from("home_sections")
+      .select("id, type, title, config, active, sort_order")
+      .eq("active", true)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("home_sections")
+      .select("id", { count: "exact", head: true })
+      .eq("type", "cta_band"),
+  ]);
 
   const sections: SectionRow[] = (rawSections ?? []).map((r) => ({
     id: r.id,
@@ -74,6 +84,7 @@ export default async function HomePage() {
         ? (r.config as Record<string, unknown>)
         : {},
   }));
+  const hasCtaBandConfigured = (ctaBandCount ?? 0) > 0;
 
   // 2. Pre-load just the data needed by the enabled section types. Compute
   // the maximum N up-front so two `featured_products` sections (e.g. 8 + 12)
@@ -157,7 +168,7 @@ export default async function HomePage() {
         <ValueProps />
         <CategoryGrid categories={data.categories} />
         <FeaturedProducts products={data.products} />
-        <CtaBand />
+        <CtaBand config={{}} />
       </div>
     );
   }
@@ -176,7 +187,10 @@ export default async function HomePage() {
           {i === valuePropsAfterIndex ? <ValueProps /> : null}
         </Fragment>
       ))}
-      <CtaBand />
+      {/* Legacy hardcoded CTA — only when the admin has not added any
+          cta_band rows yet (active or inactive). The moment they add one,
+          they own the lifecycle of the CTA. */}
+      {!hasCtaBandConfigured ? <CtaBand config={{}} /> : null}
     </div>
   );
 }
@@ -215,6 +229,8 @@ function renderSection(section: SectionRow, data: PreloadedData) {
           html={typeof section.config.html === "string" ? section.config.html : ""}
         />
       );
+    case "cta_band":
+      return <CtaBand config={section.config} />;
     default:
       return null;
   }
@@ -560,28 +576,53 @@ function CustomHtml({ html }: { html: string }) {
   );
 }
 
-function CtaBand() {
+/**
+ * Resolution order for each field:
+ *   1. `home_sections.config` for the cta_band section
+ *   2. Hard-coded brand defaults
+ *
+ * Pass an empty `config` object for the legacy hardcoded render at the
+ * bottom of the landing.
+ */
+function CtaBand({ config }: { config: Record<string, unknown> }) {
+  const str = (k: string): string | undefined => {
+    const v = config[k];
+    return typeof v === "string" && v.trim() ? v : undefined;
+  };
+
+  const title = str("title") ?? "¿Tienes un proyecto especial?";
+  const subtitle =
+    str("subtitle") ??
+    "Tirajes grandes, formatos no estándar o acabados especiales: cotizamos a la medida.";
+  // For new cta_band sections, the admin can blank the label to hide the
+  // button. For the legacy hardcoded render (`config = {}`), keep the
+  // original label so the band never ships button-less.
+  const usingConfig = Object.keys(config).length > 0;
+  const buttonLabel = usingConfig
+    ? str("button_label")
+    : (str("button_label") ?? "Solicitar cotización");
+  const buttonHref = str("button_href") ?? "/contacto";
+
   return (
     <section className="bg-primary text-primary-foreground">
       <div className="mx-auto flex w-full max-w-7xl flex-col items-start gap-4 px-4 py-12 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
         <div>
           <h2 className="text-2xl font-black tracking-tight sm:text-3xl">
-            ¿Tienes un proyecto especial?
+            {title}
           </h2>
-          <p className="mt-1 max-w-xl text-primary-foreground/80">
-            Tirajes grandes, formatos no estándar o acabados especiales:
-            cotizamos a la medida.
-          </p>
+          <p className="mt-1 max-w-xl text-primary-foreground/80">{subtitle}</p>
         </div>
-        <Link
-          href="/contacto"
-          className={cn(
-            buttonVariants({ variant: "secondary", size: "lg" }),
-            "shrink-0",
-          )}
-        >
-          Solicitar cotización
-        </Link>
+        {buttonLabel ? (
+          <Link
+            href={buttonHref}
+            className={cn(
+              buttonVariants({ variant: "secondary", size: "lg" }),
+              "shrink-0",
+            )}
+          >
+            {buttonLabel}
+          </Link>
+        ) : null}
       </div>
     </section>
   );

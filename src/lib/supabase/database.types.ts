@@ -32,7 +32,8 @@ export type HomeSectionType =
   | "featured_products"
   | "category_grid"
   | "banner_strip"
-  | "custom_html";
+  | "custom_html"
+  | "cta_band";
 export type ProductStatus = "draft" | "active" | "archived";
 export type DiscountType = "percent" | "amount" | "free_shipping";
 export type PromotionRuleType =

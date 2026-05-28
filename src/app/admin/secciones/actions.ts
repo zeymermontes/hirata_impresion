@@ -12,6 +12,7 @@ const SECTION_TYPES = [
   "category_grid",
   "banner_strip",
   "custom_html",
+  "cta_band",
 ] as const;
 
 const SectionSchema = z.object({
@@ -58,6 +59,18 @@ function buildConfig(type: string, formData: FormData): Record<string, unknown> 
     }
     case "custom_html":
       return { html: String(formData.get("html") ?? "") };
+    case "cta_band": {
+      const str = (key: string) => {
+        const v = String(formData.get(key) ?? "").trim();
+        return v.length > 0 ? v : undefined;
+      };
+      return {
+        title: str("cta_title"),
+        subtitle: str("cta_subtitle"),
+        button_label: str("cta_button_label"),
+        button_href: str("cta_button_href"),
+      };
+    }
     default:
       return {};
   }

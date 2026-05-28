@@ -19,7 +19,8 @@ export type SectionType =
   | "featured_products"
   | "category_grid"
   | "banner_strip"
-  | "custom_html";
+  | "custom_html"
+  | "cta_band";
 
 export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
   hero_banners: "Banners principales (hero)",
@@ -27,6 +28,7 @@ export const SECTION_TYPE_LABEL: Record<SectionType, string> = {
   category_grid: "Grid de categorías",
   banner_strip: "Banda de promociones",
   custom_html: "HTML personalizado",
+  cta_band: "Banda de llamado a la acción (CTA)",
 };
 
 export type Section = {
@@ -239,6 +241,59 @@ function TypeConfigFields({
         <p className="text-xs text-muted-foreground">
           Para esconder un botón, déjalo sin texto. Los destinos pueden ser
           rutas internas (<code>/productos</code>) o URLs externas.
+        </p>
+      </div>
+    );
+  }
+  if (type === "cta_band") {
+    return (
+      <div className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+        <p className="text-xs text-muted-foreground">
+          Banda amarilla con un mensaje y un botón. Útil para invitar a
+          cotizar, suscribirse, etc.
+        </p>
+        <div className="grid gap-1.5">
+          <Label htmlFor="cta_title">Título</Label>
+          <Input
+            id="cta_title"
+            name="cta_title"
+            defaultValue={String(initial.title ?? "")}
+            placeholder="Ej. ¿Tienes un proyecto especial?"
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="cta_subtitle">Subtítulo / descripción</Label>
+          <Textarea
+            id="cta_subtitle"
+            name="cta_subtitle"
+            rows={2}
+            defaultValue={String(initial.subtitle ?? "")}
+            placeholder="Ej. Tirajes grandes, formatos no estándar…"
+          />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1.5">
+            <Label htmlFor="cta_button_label">Botón · texto</Label>
+            <Input
+              id="cta_button_label"
+              name="cta_button_label"
+              defaultValue={String(initial.button_label ?? "")}
+              placeholder="Solicitar cotización"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="cta_button_href">Botón · destino</Label>
+            <Input
+              id="cta_button_href"
+              name="cta_button_href"
+              defaultValue={String(initial.button_href ?? "")}
+              placeholder="/contacto"
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Deja el texto del botón vacío para esconderlo. El destino puede ser
+          una ruta interna (<code>/contacto</code>) o URL externa.
         </p>
       </div>
     );

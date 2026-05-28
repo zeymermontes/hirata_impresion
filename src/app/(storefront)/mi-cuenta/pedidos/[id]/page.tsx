@@ -192,15 +192,15 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
       ) : null}
 
       <Card>
-        <CardContent className="space-y-3 p-6">
+        <CardContent className="space-y-3 p-4 sm:p-6">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Artículos
           </h3>
           <ul className="divide-y divide-border">
             {items.map((i) => (
               <li key={i.id} className="flex items-start gap-3 py-3">
-                <div className="flex-1">
-                  <p className="font-medium">{i.product_name}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium break-words">{i.product_name}</p>
                   {i.variant_name ? (
                     <p className="text-xs text-muted-foreground">
                       {i.variant_name}
@@ -270,16 +270,16 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
       </Card>
 
       <Card>
-        <CardContent className="space-y-3 p-6 text-sm">
+        <CardContent className="space-y-3 p-4 text-sm sm:p-6">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Entrega
           </h3>
           {order.fulfillment === "ship" && addr ? (
             <div className="flex items-start gap-3">
-              <Truck className="mt-0.5 h-4 w-4 text-primary" />
-              <div>
+              <Truck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div className="min-w-0">
                 <p className="font-medium">Envío a domicilio</p>
-                <p className="text-muted-foreground">
+                <p className="break-words text-muted-foreground">
                   {addr.recipient} — {addr.street} {addr.ext_number ?? ""}
                   {addr.neighborhood ? `, ${addr.neighborhood}` : ""},{" "}
                   {addr.zip} {addr.city}, {addr.state}
@@ -288,12 +288,12 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
             </div>
           ) : branchInfo ? (
             <div className="flex items-start gap-3">
-              <Store className="mt-0.5 h-4 w-4 text-primary" />
-              <div>
+              <Store className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div className="min-w-0">
                 <p className="font-medium">
                   Recoger en {branchInfo.name}
                 </p>
-                <p className="text-muted-foreground">
+                <p className="break-words text-muted-foreground">
                   {branchInfo.address}, {branchInfo.city}
                 </p>
               </div>
@@ -313,7 +313,7 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
       ) : null}
 
       <Card>
-        <CardContent className="space-y-1 p-6 text-sm">
+        <CardContent className="space-y-1 p-4 text-sm sm:p-6">
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Pago
           </h3>
@@ -326,7 +326,7 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
             {order.payment_status ?? "—"}
           </p>
           {order.payment_id ? (
-            <p className="font-mono text-xs text-muted-foreground">
+            <p className="break-all font-mono text-xs text-muted-foreground">
               ID: {order.payment_id}
             </p>
           ) : null}
@@ -349,7 +349,7 @@ function TrackingCard({
   const inTransit = status === "shipped";
   return (
     <Card>
-      <CardContent className="space-y-3 p-6 text-sm">
+      <CardContent className="space-y-3 p-4 text-sm sm:p-6">
         <div className="flex items-center gap-2">
           <Package className="h-4 w-4 text-primary" />
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -416,9 +416,11 @@ function CustomizationSummary({ data }: { data: Record<string, unknown> }) {
           );
         }
         return (
-          <div key={key} className="flex gap-1.5">
-            <dt className="text-muted-foreground capitalize">{key}:</dt>
-            <dd className="truncate">{String(value)}</dd>
+          <div key={key} className="flex min-w-0 gap-1.5">
+            <dt className="shrink-0 text-muted-foreground capitalize">
+              {key}:
+            </dt>
+            <dd className="min-w-0 flex-1 truncate">{String(value)}</dd>
           </div>
         );
       })}

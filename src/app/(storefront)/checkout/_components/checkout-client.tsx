@@ -119,65 +119,15 @@ export function CheckoutClient({
   const total = subtotal + shipping - subtotalDiscount;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
-      <ShippingForm
-        formAction={formAction}
-        state={state}
-        fulfillment={fulfillment}
-        setFulfillment={setFulfillment}
-        addressId={addressId}
-        setAddressId={setAddressId}
-        branchId={branchId}
-        setBranchId={setBranchId}
-        addresses={addresses}
-        branches={branches}
-        appliedCode={appliedCode}
-      />
-
-      <Summary
-        items={items}
-        subtotal={subtotal}
-        rawShipping={rawShipping}
-        shipping={shipping}
-        subtotalDiscount={subtotalDiscount}
-        total={total}
-        fulfillment={fulfillment}
-        promos={promos}
-        appliedCode={appliedCode}
-        onApplyCode={setAppliedCode}
-        onRemoveCode={() => setAppliedCode(null)}
-      />
-    </div>
-  );
-}
-
-function ShippingForm({
-  formAction,
-  state,
-  fulfillment,
-  setFulfillment,
-  addressId,
-  setAddressId,
-  branchId,
-  setBranchId,
-  addresses,
-  branches,
-  appliedCode,
-}: {
-  formAction: (payload: FormData) => void;
-  state: CreateOrderState | undefined;
-  fulfillment: "ship" | "pickup";
-  setFulfillment: (v: "ship" | "pickup") => void;
-  addressId: string;
-  setAddressId: (v: string) => void;
-  branchId: string;
-  setBranchId: (v: string) => void;
-  addresses: Address[];
-  branches: Branch[];
-  appliedCode: AppliedCode | null;
-}) {
-  return (
-    <form action={formAction} className="space-y-6">
+    // Single <form> wrapping all three grid cells: shipping fields, summary,
+    // and the continue button. On desktop, shipping + button stack in the
+    // left column (rows 1 & 2) and the summary spans both rows in the right
+    // column. On mobile, natural DOM order means shipping → summary →
+    // button — the customer reviews the total before committing.
+    <form
+      action={formAction}
+      className="grid gap-6 lg:grid-cols-[1fr_360px] lg:gap-8"
+    >
       <input type="hidden" name="fulfillment" value={fulfillment} />
       {fulfillment === "ship" ? (
         <input type="hidden" name="address_id" value={addressId} />
@@ -192,6 +142,71 @@ function ShippingForm({
         />
       ) : null}
 
+      <div className="space-y-6 lg:col-start-1 lg:row-start-1">
+        <ShippingFields
+          state={state}
+          fulfillment={fulfillment}
+          setFulfillment={setFulfillment}
+          addressId={addressId}
+          setAddressId={setAddressId}
+          branchId={branchId}
+          setBranchId={setBranchId}
+          addresses={addresses}
+          branches={branches}
+        />
+      </div>
+
+      <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
+        <Summary
+          items={items}
+          subtotal={subtotal}
+          rawShipping={rawShipping}
+          shipping={shipping}
+          subtotalDiscount={subtotalDiscount}
+          total={total}
+          fulfillment={fulfillment}
+          promos={promos}
+          appliedCode={appliedCode}
+          onApplyCode={setAppliedCode}
+          onRemoveCode={() => setAppliedCode(null)}
+        />
+      </div>
+
+      <div className="lg:col-start-1 lg:row-start-2">
+        <ContinueButton
+          disabled={
+            (fulfillment === "ship" && !addressId) ||
+            (fulfillment === "pickup" && !branchId)
+          }
+        />
+      </div>
+    </form>
+  );
+}
+
+function ShippingFields({
+  state,
+  fulfillment,
+  setFulfillment,
+  addressId,
+  setAddressId,
+  branchId,
+  setBranchId,
+  addresses,
+  branches,
+}: {
+  state: CreateOrderState | undefined;
+  fulfillment: "ship" | "pickup";
+  setFulfillment: (v: "ship" | "pickup") => void;
+  addressId: string;
+  setAddressId: (v: string) => void;
+  branchId: string;
+  setBranchId: (v: string) => void;
+  addresses: Address[];
+  branches: Branch[];
+}) {
+  return (
+    <>
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">¿Cómo quieres recibirlo?</h2>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -317,14 +332,7 @@ function ShippingForm({
           {state.errors.branch_id[0]}
         </p>
       ) : null}
-
-      <ContinueButton
-        disabled={
-          (fulfillment === "ship" && !addressId) ||
-          (fulfillment === "pickup" && !branchId)
-        }
-      />
-    </form>
+    </>
   );
 }
 

@@ -18,8 +18,13 @@ export function AdminPageHeader({
   className,
 }: Props) {
   return (
-    <div className={cn("flex items-start justify-between gap-4", className)}>
-      <div className="space-y-1">
+    <div
+      className={cn(
+        "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4",
+        className,
+      )}
+    >
+      <div className="min-w-0 space-y-1">
         {backHref ? (
           <Link
             href={backHref}
@@ -28,7 +33,9 @@ export function AdminPageHeader({
             <ArrowLeft className="h-3 w-3" /> Volver
           </Link>
         ) : null}
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+        <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+          {title}
+        </h1>
         {description ? (
           <p className="text-sm text-muted-foreground">{description}</p>
         ) : null}

@@ -15,6 +15,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { HirataLogo } from "@/components/hirata-logo";
+import { AdminMobileNav } from "@/app/admin/_components/admin-mobile-nav";
 import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/app/(auth)/actions";
 
@@ -87,21 +88,27 @@ export default async function AdminLayout({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-16 items-center justify-between border-b border-border bg-background px-6">
-          <h1 className="text-sm text-muted-foreground">
-            Conectado como{" "}
-            <span className="font-medium text-foreground">
-              {profile?.full_name || user.email}
-            </span>
-          </h1>
+        <header className="flex h-16 items-center justify-between gap-2 border-b border-border bg-background px-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-1">
+            <AdminMobileNav />
+            <h1 className="truncate text-sm text-muted-foreground">
+              <span className="hidden sm:inline">Conectado como </span>
+              <span className="font-medium text-foreground">
+                {profile?.full_name || user.email}
+              </span>
+            </h1>
+          </div>
           <Link
             href="/"
-            className="text-sm font-medium text-muted-foreground hover:text-foreground"
+            className="shrink-0 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
-            Ver tienda →
+            <span className="hidden sm:inline">Ver tienda →</span>
+            <span className="sm:hidden">Tienda →</span>
           </Link>
         </header>
-        <main className="min-w-0 flex-1 overflow-y-auto p-6">{children}</main>
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          {children}
+        </main>
       </div>
     </div>
   );

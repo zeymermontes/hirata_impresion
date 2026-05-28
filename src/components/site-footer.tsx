@@ -1,7 +1,68 @@
 import Link from "next/link";
 import { HirataLogo } from "@/components/hirata-logo";
+import { createClient } from "@/lib/supabase/server";
 
-export function SiteFooter() {
+type FooterProduct = { slug: string; name: string };
+
+/**
+ * Top 4 best-selling products by total quantity in order_items, restricted
+ * to active products. Falls back to the most recent active products if
+ * there aren't enough orders yet.
+ */
+async function getFooterProducts(): Promise<FooterProduct[]> {
+  const supabase = await createClient();
+
+  const { data: items } = await supabase
+    .from("order_items")
+    .select("product_id, quantity")
+    .not("product_id", "is", null);
+
+  const byId = new Map<string, number>();
+  for (const it of items ?? []) {
+    if (!it.product_id) continue;
+    byId.set(it.product_id, (byId.get(it.product_id) ?? 0) + Number(it.quantity));
+  }
+  const topIds = Array.from(byId.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([id]) => id);
+
+  const sellers: FooterProduct[] = [];
+  if (topIds.length > 0) {
+    const { data: rows } = await supabase
+      .from("products")
+      .select("id, slug, name, status")
+      .in("id", topIds)
+      .eq("status", "active");
+    const byProductId = new Map(rows?.map((r) => [r.id, r]) ?? []);
+    for (const id of topIds) {
+      const row = byProductId.get(id);
+      if (!row) continue;
+      sellers.push({ slug: row.slug, name: row.name });
+      if (sellers.length >= 4) break;
+    }
+  }
+
+  if (sellers.length < 4) {
+    const { data: fill } = await supabase
+      .from("products")
+      .select("slug, name")
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(4);
+    const seen = new Set(sellers.map((s) => s.slug));
+    for (const r of fill ?? []) {
+      if (seen.has(r.slug)) continue;
+      sellers.push({ slug: r.slug, name: r.name });
+      if (sellers.length >= 4) break;
+    }
+  }
+
+  return sellers.slice(0, 4);
+}
+
+export async function SiteFooter() {
+  const topProducts = await getFooterProducts();
   return (
     <footer className="mt-auto border-t border-border bg-secondary text-secondary-foreground">
       <div className="mx-auto grid w-full max-w-7xl gap-10 px-4 py-12 sm:px-6 lg:px-8 md:grid-cols-4">
@@ -16,10 +77,13 @@ export function SiteFooter() {
         <div>
           <h4 className="text-sm font-semibold uppercase tracking-wide text-primary">Productos</h4>
           <ul className="mt-3 space-y-2 text-sm">
-            <li><Link className="hover:text-primary" href="/productos?categoria=lonas">Lonas</Link></li>
-            <li><Link className="hover:text-primary" href="/productos?categoria=vinilos">Vinilos</Link></li>
-            <li><Link className="hover:text-primary" href="/productos?categoria=papeleria">Papelería</Link></li>
-            <li><Link className="hover:text-primary" href="/productos?categoria=senalizacion">Señalización</Link></li>
+            {topProducts.map((p) => (
+              <li key={p.slug}>
+                <Link className="hover:text-primary" href={`/productos/${p.slug}`}>
+                  {p.name}
+                </Link>
+              </li>
+            ))}
           </ul>
         </div>
 

@@ -11,6 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PromotionsSummary } from "@/app/(storefront)/_components/promotions-summary";
 import {
+  PromoCodeInput,
+  type AppliedCode,
+} from "@/app/(storefront)/checkout/_components/promo-code-input";
+import {
   createOrderAction,
   type CreateOrderState,
 } from "@/app/(storefront)/checkout/actions";
@@ -78,6 +82,7 @@ export function CheckoutClient({
   );
   const [addressId, setAddressId] = useState<string>(defaultAddress?.id ?? "");
   const [branchId, setBranchId] = useState<string>(branches[0]?.id ?? "");
+  const [appliedCode, setAppliedCode] = useState<AppliedCode | null>(null);
 
   const subtotal = items.reduce(
     (acc, i) => acc + Number(i.unit_price) * Number(i.quantity),
@@ -99,8 +104,18 @@ export function CheckoutClient({
     })),
     rawShipping,
   );
-  const shipping = promos.free_shipping ? 0 : rawShipping;
-  const subtotalDiscount = promos.total_discount - (promos.free_shipping ? rawShipping : 0);
+  // Free shipping kicks in if EITHER an auto rule or the applied code grants
+  // it. Discount totals stack — the code's contribution is added on top of
+  // the rule total.
+  const freeShipping = promos.free_shipping || (appliedCode?.free_shipping ?? false);
+  const shipping = freeShipping ? 0 : rawShipping;
+  const ruleSubtotalDiscount =
+    promos.total_discount - (promos.free_shipping ? rawShipping : 0);
+  const codeSubtotalDiscount = appliedCode
+    ? appliedCode.discount_amount -
+      (appliedCode.free_shipping ? rawShipping : 0)
+    : 0;
+  const subtotalDiscount = ruleSubtotalDiscount + codeSubtotalDiscount;
   const total = subtotal + shipping - subtotalDiscount;
 
   return (
@@ -116,6 +131,7 @@ export function CheckoutClient({
         setBranchId={setBranchId}
         addresses={addresses}
         branches={branches}
+        appliedCode={appliedCode}
       />
 
       <Summary
@@ -127,6 +143,9 @@ export function CheckoutClient({
         total={total}
         fulfillment={fulfillment}
         promos={promos}
+        appliedCode={appliedCode}
+        onApplyCode={setAppliedCode}
+        onRemoveCode={() => setAppliedCode(null)}
       />
     </div>
   );
@@ -143,6 +162,7 @@ function ShippingForm({
   setBranchId,
   addresses,
   branches,
+  appliedCode,
 }: {
   formAction: (payload: FormData) => void;
   state: CreateOrderState | undefined;
@@ -154,6 +174,7 @@ function ShippingForm({
   setBranchId: (v: string) => void;
   addresses: Address[];
   branches: Branch[];
+  appliedCode: AppliedCode | null;
 }) {
   return (
     <form action={formAction} className="space-y-6">
@@ -163,6 +184,13 @@ function ShippingForm({
       ) : (
         <input type="hidden" name="branch_id" value={branchId} />
       )}
+      {appliedCode ? (
+        <input
+          type="hidden"
+          name="promo_code"
+          value={appliedCode.promo.code}
+        />
+      ) : null}
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">¿Cómo quieres recibirlo?</h2>
@@ -309,6 +337,9 @@ function Summary({
   total,
   fulfillment,
   promos,
+  appliedCode,
+  onApplyCode,
+  onRemoveCode,
 }: {
   items: CartItem[];
   subtotal: number;
@@ -318,6 +349,9 @@ function Summary({
   total: number;
   fulfillment: "ship" | "pickup";
   promos: ReturnType<typeof evaluatePromotions>;
+  appliedCode: AppliedCode | null;
+  onApplyCode: (a: AppliedCode) => void;
+  onRemoveCode: () => void;
 }) {
   void rawShipping;
   return (
@@ -355,6 +389,15 @@ function Summary({
           ))}
         </ul>
         <PromotionsSummary result={promos} />
+        <div className="border-t border-border pt-3">
+          <PromoCodeInput
+            cartSubtotal={subtotal}
+            shippingCost={rawShipping}
+            applied={appliedCode}
+            onApply={onApplyCode}
+            onRemove={onRemoveCode}
+          />
+        </div>
         <div className="space-y-2 border-t border-border pt-3 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>

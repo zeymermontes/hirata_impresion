@@ -3,10 +3,10 @@ import { Sparkles } from "lucide-react";
 import { formatMXN } from "@/lib/utils";
 import { getCart } from "@/lib/cart";
 import {
-  getActivePromotionRules,
   evaluatePromotions,
   type CartItemForPromo,
 } from "@/lib/promotions";
+import { getActivePromotionRules } from "@/lib/promotions-server";
 
 type CartItemRow = {
   quantity: number;

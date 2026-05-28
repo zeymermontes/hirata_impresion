@@ -22,7 +22,14 @@ export function OrderAppliedPromotions({
         >
           <span className="flex items-start gap-1.5">
             <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span className="font-medium">{p.label}</span>
+            <span className="flex flex-wrap items-baseline gap-1.5">
+              <span className="font-medium">{p.label}</span>
+              {p.code ? (
+                <span className="font-mono text-[10px] uppercase tracking-wide opacity-70">
+                  ({p.code})
+                </span>
+              ) : null}
+            </span>
           </span>
           <span className="font-semibold">
             {p.type === "free_shipping"

@@ -34,7 +34,7 @@ export type HomeSectionType =
   | "banner_strip"
   | "custom_html";
 export type ProductStatus = "draft" | "active" | "archived";
-export type DiscountType = "percent" | "amount";
+export type DiscountType = "percent" | "amount" | "free_shipping";
 export type PromotionRuleType =
   | "free_shipping"
   | "percent_off"
@@ -395,28 +395,34 @@ export interface Database {
         {
           id: string;
           code: string;
+          label: string;
           description: string | null;
           discount_type: DiscountType;
           value: number;
+          min_subtotal: number | null;
           conditions: Json | null;
           starts_at: string | null;
           ends_at: string | null;
           usage_limit: number | null;
           times_used: number;
           active: boolean;
+          updated_at: string;
         },
         {
           id?: string;
           code: string;
+          label: string;
           description?: string | null;
           discount_type: DiscountType;
           value: number;
+          min_subtotal?: number | null;
           conditions?: Json | null;
           starts_at?: string | null;
           ends_at?: string | null;
           usage_limit?: number | null;
           times_used?: number;
           active?: boolean;
+          updated_at?: string;
         }
       >;
       site_settings: Table<

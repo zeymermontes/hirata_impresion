@@ -9,11 +9,21 @@ import { clearUserCart, getCart } from "@/lib/cart";
 import { mpPreference } from "@/lib/mercadopago";
 import { env } from "@/lib/env";
 import {
-  getActivePromotionRules,
   evaluatePromotions,
   snapshotApplied,
   type CartItemForPromo,
+  type AppliedPromotionSnapshot,
 } from "@/lib/promotions";
+import { getActivePromotionRules } from "@/lib/promotions-server";
+import {
+  evaluatePromoCode,
+  snapshotCodeApplication,
+  type PromoCode,
+} from "@/lib/promo-codes";
+import {
+  validatePromoCode,
+  incrementCodeUsage,
+} from "@/lib/promo-codes-server";
 import type { Json } from "@/lib/supabase/database.types";
 
 const SHIPPING_FLAT_MXN = 100;
@@ -146,10 +156,78 @@ export async function createOrderAction(
       (acc, i) => acc + Number(i.unit_price) * Number(i.quantity),
       0,
     );
-    const shippingCost = promos.free_shipping ? 0 : rawShipping;
+
+    // Re-validate the manual code server-side against the *current* cart
+    // subtotal — the client preview is advisory. If the cart changed (or the
+    // code expired) we silently drop it; the customer sees the updated total
+    // on the next page.
+    const rawCode = formData.get("promo_code");
+    let appliedCode: {
+      promo: PromoCode;
+      discount: number;
+      free_shipping: boolean;
+    } | null = null;
+    if (typeof rawCode === "string" && rawCode.trim()) {
+      const validation = await validatePromoCode(rawCode, subtotal);
+      if (validation.ok) {
+        const evalCode = evaluatePromoCode(
+          validation.promo,
+          subtotal,
+          rawShipping,
+        );
+        appliedCode = {
+          promo: validation.promo,
+          discount: evalCode.discount_amount,
+          free_shipping: evalCode.free_shipping,
+        };
+      }
+    }
+
+    // Stack: free shipping wins if EITHER an auto rule OR the code grants it.
+    const freeShipping = promos.free_shipping || (appliedCode?.free_shipping ?? false);
+    const shippingCost = freeShipping ? 0 : rawShipping;
     const subtotalDiscount =
-      promos.total_discount - (promos.free_shipping ? rawShipping : 0);
+      promos.total_discount -
+      (promos.free_shipping ? rawShipping : 0) +
+      (appliedCode
+        ? appliedCode.discount - (appliedCode.free_shipping ? rawShipping : 0)
+        : 0);
     const total = round2(subtotal + shippingCost - subtotalDiscount);
+
+    // Merge rule + code snapshots into a single JSON column on the order.
+    const snapshotList: AppliedPromotionSnapshot[] = [
+      ...snapshotApplied(promos.applied),
+    ];
+    if (appliedCode) {
+      snapshotList.push(
+        snapshotCodeApplication(appliedCode.promo, {
+          rule: {
+            id: appliedCode.promo.id,
+            name: appliedCode.promo.code,
+            label: appliedCode.promo.label,
+            description: appliedCode.promo.description,
+            type:
+              appliedCode.promo.discount_type === "percent"
+                ? "percent_off"
+                : appliedCode.promo.discount_type === "amount"
+                  ? "amount_off"
+                  : "free_shipping",
+            discount_value: appliedCode.promo.value,
+            min_subtotal: appliedCode.promo.min_subtotal,
+            scope: "all",
+            starts_at: appliedCode.promo.starts_at,
+            ends_at: appliedCode.promo.ends_at,
+            sort_order: 0,
+            active: appliedCode.promo.active,
+            product_ids: [],
+            category_ids: [],
+          },
+          qualified: true,
+          discount_amount: appliedCode.discount,
+          free_shipping: appliedCode.free_shipping,
+        }),
+      );
+    }
 
     const { data: order, error: orderErr } = await supabase
       .from("orders")
@@ -165,8 +243,8 @@ export async function createOrderAction(
         payment_provider: "mercadopago",
         discount_amount: round2(subtotalDiscount),
         applied_promotions:
-          promos.applied.length > 0
-            ? (snapshotApplied(promos.applied) as unknown as Json)
+          snapshotList.length > 0
+            ? (snapshotList as unknown as Json)
             : null,
       })
       .select("id, total")
@@ -190,6 +268,11 @@ export async function createOrderAction(
       .from("order_items")
       .insert(orderItemsInsert);
     if (itemsErr) return { message: itemsErr.message };
+
+    if (appliedCode) {
+      // Best-effort — usage increments don't gate the redirect.
+      await incrementCodeUsage(appliedCode.promo.id);
+    }
 
     await clearUserCart();
     revalidatePath("/carrito");
@@ -271,4 +354,43 @@ export async function createPreferenceForOrder(
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// ============================================================
+// Promo code validation (used by the checkout client to preview)
+// ============================================================
+
+export type ValidatePromoCodeResult =
+  | {
+      ok: true;
+      promo: PromoCode;
+      discount_amount: number;
+      free_shipping: boolean;
+    }
+  | { ok: false; message: string };
+
+/**
+ * Server Action invoked when the customer presses "Aplicar" on a promo code.
+ * Returns the validated promo plus its computed discount so the checkout
+ * summary can preview the new total. The server re-validates on actual order
+ * creation, so this is purely advisory.
+ */
+export async function validatePromoCodeAction(input: {
+  code: string;
+  cart_subtotal: number;
+  shipping_cost: number;
+}): Promise<ValidatePromoCodeResult> {
+  const validation = await validatePromoCode(input.code, input.cart_subtotal);
+  if (!validation.ok) return validation;
+  const evaluated = evaluatePromoCode(
+    validation.promo,
+    input.cart_subtotal,
+    input.shipping_cost,
+  );
+  return {
+    ok: true,
+    promo: validation.promo,
+    discount_amount: evaluated.discount_amount,
+    free_shipping: evaluated.free_shipping,
+  };
 }

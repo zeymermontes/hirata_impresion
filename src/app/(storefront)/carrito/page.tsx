@@ -7,10 +7,10 @@ import { CartItemRow } from "@/app/(storefront)/carrito/_components/cart-item-ro
 import { PromotionsSummary } from "@/app/(storefront)/_components/promotions-summary";
 import { getCart } from "@/lib/cart";
 import {
-  getActivePromotionRules,
   evaluatePromotions,
   type CartItemForPromo,
 } from "@/lib/promotions";
+import { getActivePromotionRules } from "@/lib/promotions-server";
 import { formatMXN, cn } from "@/lib/utils";
 
 export const metadata = { title: "Carrito" };

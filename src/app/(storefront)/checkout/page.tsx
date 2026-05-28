@@ -6,7 +6,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { CheckoutClient } from "@/app/(storefront)/checkout/_components/checkout-client";
 import { requireUser } from "@/lib/auth";
 import { getCart } from "@/lib/cart";
-import { getActivePromotionRules } from "@/lib/promotions";
+import { getActivePromotionRules } from "@/lib/promotions-server";
 
 export const metadata = { title: "Checkout" };
 export const dynamic = "force-dynamic";

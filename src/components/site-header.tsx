@@ -2,6 +2,10 @@ import Link from "next/link";
 import { ShoppingCart, User, ShieldCheck, History } from "lucide-react";
 import { HirataLogo } from "@/components/hirata-logo";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  HeaderCategoryMenu,
+  type CategoryNavItem,
+} from "@/components/site-header-category-menu";
 import { createClient } from "@/lib/supabase/server";
 import { getCartItemCount, getPendingOrderCount } from "@/lib/cart";
 import { cn } from "@/lib/utils";
@@ -23,14 +27,39 @@ export async function SiteHeader() {
   }
 
   // Categories the admin chose to show in the header. We cap the list so a
-  // misconfiguration doesn't blow up the nav.
+  // misconfiguration doesn't blow up the nav. We also fetch the direct
+  // children of each (categories whose parent_id is one of these) so the
+  // header can render a hover dropdown of subcategories.
   const { data: headerCategories } = await supabase
     .from("categories")
-    .select("slug, name")
+    .select("id, slug, name")
     .eq("show_in_header", true)
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true })
     .limit(6);
+
+  const parentIds = (headerCategories ?? []).map((c) => c.id);
+  const childrenByParent = new Map<string, { slug: string; name: string }[]>();
+  if (parentIds.length > 0) {
+    const { data: children } = await supabase
+      .from("categories")
+      .select("slug, name, parent_id")
+      .in("parent_id", parentIds)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true });
+    for (const c of children ?? []) {
+      if (!c.parent_id) continue;
+      const arr = childrenByParent.get(c.parent_id) ?? [];
+      arr.push({ slug: c.slug, name: c.name });
+      childrenByParent.set(c.parent_id, arr);
+    }
+  }
+
+  const navItems: CategoryNavItem[] = (headerCategories ?? []).map((c) => ({
+    slug: c.slug,
+    name: c.name,
+    children: childrenByParent.get(c.id) ?? [],
+  }));
 
   const [cartCount, pendingOrderCount] = await Promise.all([
     getCartItemCount(),
@@ -51,14 +80,8 @@ export async function SiteHeader() {
           >
             Productos
           </Link>
-          {(headerCategories ?? []).map((c) => (
-            <Link
-              key={c.slug}
-              href={`/productos?categoria=${c.slug}`}
-              className="text-sm font-medium text-foreground/80 hover:text-foreground transition-colors"
-            >
-              {c.name}
-            </Link>
+          {navItems.map((item) => (
+            <HeaderCategoryMenu key={item.slug} item={item} />
           ))}
           <Link
             href="/contacto"

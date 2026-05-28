@@ -11,6 +11,7 @@ import {
   Users,
   Settings,
   Sparkles,
+  Ticket,
   LogOut,
 } from "lucide-react";
 import { HirataLogo } from "@/components/hirata-logo";
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/admin/categorias", label: "Categorías", icon: Tag },
   { href: "/admin/banners", label: "Banners", icon: ImageIcon },
   { href: "/admin/promociones", label: "Promociones", icon: Sparkles },
+  { href: "/admin/codigos", label: "Códigos", icon: Ticket },
   { href: "/admin/secciones", label: "Landing", icon: LayoutPanelLeft },
   { href: "/admin/sucursales", label: "Sucursales", icon: Building2 },
   { href: "/admin/usuarios", label: "Usuarios", icon: Users },

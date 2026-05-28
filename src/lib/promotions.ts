@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import type {
   PromotionRuleType,
   PromotionRuleScope,
@@ -53,75 +52,24 @@ export type CartPromotionsResult = {
   free_shipping: boolean;
 };
 
-/** Snapshot persisted on the order so receipts survive rule changes. */
+/**
+ * Snapshot persisted on the order so receipts survive rule/code changes.
+ * `rule_id` is either a `promotion_rules.id` (auto rule) or `promotions.id`
+ * (manual code) — disambiguate by the presence of `code`.
+ */
 export type AppliedPromotionSnapshot = {
   rule_id: string;
   label: string;
   type: PromotionRuleType;
   discount_amount: number;
+  /** Present iff the customer entered a manual code (vs. an auto rule). */
+  code?: string;
 };
 
 // ============================================================
-// Engine
+// Engine (pure — server fetcher lives in `promotions-server.ts` so this
+// module can be imported from client components for type + math reuse)
 // ============================================================
-
-/**
- * Fetch active rules within the current time window. The query also joins to
- * the product/category link tables so the engine can decide which items in the
- * cart qualify under each rule's scope.
- */
-export async function getActivePromotionRules(): Promise<PromotionRule[]> {
-  const supabase = await createClient();
-  const nowIso = new Date().toISOString();
-
-  // Public can read active rules per RLS. Fetch all in one shot then filter
-  // the time window in JS (Supabase's `.or()` for null-safe ranges is awkward).
-  const { data: rules } = await supabase
-    .from("promotion_rules")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order", { ascending: true });
-
-  const live = (rules ?? []).filter((r) => {
-    if (r.starts_at && r.starts_at > nowIso) return false;
-    if (r.ends_at && r.ends_at <= nowIso) return false;
-    return true;
-  });
-  if (live.length === 0) return [];
-
-  const ruleIds = live.map((r) => r.id);
-  const [{ data: prods }, { data: cats }] = await Promise.all([
-    supabase
-      .from("promotion_rule_products")
-      .select("promotion_rule_id, product_id")
-      .in("promotion_rule_id", ruleIds),
-    supabase
-      .from("promotion_rule_categories")
-      .select("promotion_rule_id, category_id")
-      .in("promotion_rule_id", ruleIds),
-  ]);
-
-  const productsByRule = new Map<string, string[]>();
-  for (const row of prods ?? []) {
-    const arr = productsByRule.get(row.promotion_rule_id) ?? [];
-    arr.push(row.product_id);
-    productsByRule.set(row.promotion_rule_id, arr);
-  }
-  const catsByRule = new Map<string, string[]>();
-  for (const row of cats ?? []) {
-    const arr = catsByRule.get(row.promotion_rule_id) ?? [];
-    arr.push(row.category_id);
-    catsByRule.set(row.promotion_rule_id, arr);
-  }
-
-  return live.map((r) => ({
-    ...r,
-    discount_value: Number(r.discount_value),
-    min_subtotal: r.min_subtotal === null ? null : Number(r.min_subtotal),
-    product_ids: productsByRule.get(r.id) ?? [],
-    category_ids: catsByRule.get(r.id) ?? [],
-  }));
-}
 
 function qualifyingSubtotal(
   rule: PromotionRule,

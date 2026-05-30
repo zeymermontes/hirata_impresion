@@ -7,6 +7,7 @@ import {
   removeCartItem,
   updateCartItemQty,
 } from "@/app/(storefront)/carrito/actions";
+import { GiftCardThumb } from "@/components/gift-card-thumb";
 import { formatMXN } from "@/lib/utils";
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
   imageUrl: string | null;
   uploadedFileUrl: string | null;
   customization: Record<string, unknown> | null;
+  isGiftCard?: boolean;
 };
 
 export function CartItemRow({
@@ -31,6 +33,7 @@ export function CartItemRow({
   imageUrl,
   uploadedFileUrl,
   customization,
+  isGiftCard = false,
 }: Props) {
   const [qty, setQty] = useState(quantity);
   const [pending, start] = useTransition();
@@ -47,6 +50,8 @@ export function CartItemRow({
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+        ) : isGiftCard ? (
+          <GiftCardThumb showLabel />
         ) : null}
       </div>
       <div className="flex flex-1 flex-col gap-2">
@@ -132,6 +137,14 @@ function CustomizationSummary({ data }: { data: Record<string, unknown> }) {
   return (
     <dl className="mt-1 space-y-0.5 text-xs">
       {entries.map(([key, value]) => {
+        if (key === "gift_card" && value && typeof value === "object") {
+          return (
+            <GiftCardSummaryBlock
+              key={key}
+              value={value as Record<string, unknown>}
+            />
+          );
+        }
         if (key.endsWith("__url")) {
           const label = key.slice(0, -"__url".length);
           return (
@@ -158,5 +171,34 @@ function CustomizationSummary({ data }: { data: Record<string, unknown> }) {
         );
       })}
     </dl>
+  );
+}
+
+function GiftCardSummaryBlock({
+  value,
+}: {
+  value: Record<string, unknown>;
+}) {
+  const delivery =
+    value.delivery_method === "physical" ? "Tarjeta física" : "Por correo";
+  const email =
+    typeof value.recipient_email === "string" && value.recipient_email
+      ? value.recipient_email
+      : null;
+  const name =
+    typeof value.recipient_name === "string" && value.recipient_name
+      ? value.recipient_name
+      : null;
+  return (
+    <div className="grid gap-0.5">
+      <p className="font-medium text-foreground">Gift card · {delivery}</p>
+      {name || email ? (
+        <p className="break-words text-muted-foreground">
+          Para: {name ? `${name}` : ""}
+          {name && email ? " · " : ""}
+          {email ?? ""}
+        </p>
+      ) : null}
+    </div>
   );
 }

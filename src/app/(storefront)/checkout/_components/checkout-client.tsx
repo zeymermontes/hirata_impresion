@@ -3,17 +3,22 @@
 import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
-import { Truck, Store, ChevronRight } from "lucide-react";
+import { Truck, Store, ChevronRight, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PromotionsSummary } from "@/app/(storefront)/_components/promotions-summary";
+import { GiftCardThumb } from "@/components/gift-card-thumb";
 import {
   PromoCodeInput,
   type AppliedCode,
 } from "@/app/(storefront)/checkout/_components/promo-code-input";
+import {
+  GiftCardInput,
+  type AppliedGiftCard,
+} from "@/app/(storefront)/checkout/_components/gift-card-input";
 import {
   createOrderAction,
   type CreateOrderState,
@@ -56,6 +61,8 @@ type CartItem = {
   image_url: string | null;
   category_id: string | null;
   additional_category_ids: string[];
+  is_gift_card: boolean;
+  delivery_method: "email" | "physical";
 };
 
 type Props = {
@@ -76,19 +83,33 @@ export function CheckoutClient({
     FormData
   >(createOrderAction, undefined);
 
+  // All-digital cart: every item is an email-delivered gift card. No
+  // shipping, no address, no branch — the order skips the fulfillment
+  // picker entirely.
+  const allDigital = items.every(
+    (i) => i.is_gift_card && i.delivery_method === "email",
+  );
+
   const defaultAddress = addresses.find((a) => a.is_default) ?? addresses[0];
-  const [fulfillment, setFulfillment] = useState<"ship" | "pickup">(
-    addresses.length > 0 ? "ship" : "pickup",
+  const [fulfillment, setFulfillment] = useState<"ship" | "pickup" | "digital">(
+    allDigital
+      ? "digital"
+      : addresses.length > 0
+        ? "ship"
+        : "pickup",
   );
   const [addressId, setAddressId] = useState<string>(defaultAddress?.id ?? "");
   const [branchId, setBranchId] = useState<string>(branches[0]?.id ?? "");
   const [appliedCode, setAppliedCode] = useState<AppliedCode | null>(null);
+  const [appliedGiftCard, setAppliedGiftCard] =
+    useState<AppliedGiftCard | null>(null);
 
   const subtotal = items.reduce(
     (acc, i) => acc + Number(i.unit_price) * Number(i.quantity),
     0,
   );
-  const rawShipping = fulfillment === "ship" ? SHIPPING_FLAT_MXN : 0;
+  const rawShipping =
+    fulfillment === "ship" ? SHIPPING_FLAT_MXN : 0;
 
   // Evaluate promotions against the current cart + fulfillment-selected
   // shipping cost. The same engine runs again on the server when the order is
@@ -116,7 +137,14 @@ export function CheckoutClient({
       (appliedCode.free_shipping ? rawShipping : 0)
     : 0;
   const subtotalDiscount = ruleSubtotalDiscount + codeSubtotalDiscount;
-  const total = subtotal + shipping - subtotalDiscount;
+  const totalAfterDiscounts = subtotal + shipping - subtotalDiscount;
+  // Gift card redemption stacks ON TOP of all other discounts and is
+  // capped at the post-discount total (you can't redeem more than the
+  // order is worth — the rest stays on the card).
+  const giftCardApplied = appliedGiftCard
+    ? Math.min(appliedGiftCard.applied_amount, Math.max(0, totalAfterDiscounts))
+    : 0;
+  const total = Math.max(0, totalAfterDiscounts - giftCardApplied);
 
   return (
     // Single <form> wrapping all three grid cells: shipping fields, summary,
@@ -131,9 +159,9 @@ export function CheckoutClient({
       <input type="hidden" name="fulfillment" value={fulfillment} />
       {fulfillment === "ship" ? (
         <input type="hidden" name="address_id" value={addressId} />
-      ) : (
+      ) : fulfillment === "pickup" ? (
         <input type="hidden" name="branch_id" value={branchId} />
-      )}
+      ) : null}
       {appliedCode ? (
         <input
           type="hidden"
@@ -141,19 +169,30 @@ export function CheckoutClient({
           value={appliedCode.promo.code}
         />
       ) : null}
+      {appliedGiftCard ? (
+        <input
+          type="hidden"
+          name="gift_card_code"
+          value={appliedGiftCard.card.code}
+        />
+      ) : null}
 
       <div className="space-y-6 lg:col-start-1 lg:row-start-1">
-        <ShippingFields
-          state={state}
-          fulfillment={fulfillment}
-          setFulfillment={setFulfillment}
-          addressId={addressId}
-          setAddressId={setAddressId}
-          branchId={branchId}
-          setBranchId={setBranchId}
-          addresses={addresses}
-          branches={branches}
-        />
+        {allDigital ? (
+          <DigitalDeliveryBanner />
+        ) : (
+          <ShippingFields
+            state={state}
+            fulfillment={fulfillment === "digital" ? "ship" : fulfillment}
+            setFulfillment={setFulfillment}
+            addressId={addressId}
+            setAddressId={setAddressId}
+            branchId={branchId}
+            setBranchId={setBranchId}
+            addresses={addresses}
+            branches={branches}
+          />
+        )}
       </div>
 
       <div className="lg:col-start-2 lg:row-span-2 lg:row-start-1">
@@ -169,10 +208,20 @@ export function CheckoutClient({
           appliedCode={appliedCode}
           onApplyCode={setAppliedCode}
           onRemoveCode={() => setAppliedCode(null)}
+          appliedGiftCard={appliedGiftCard}
+          giftCardApplied={giftCardApplied}
+          totalAfterDiscounts={totalAfterDiscounts}
+          onApplyGiftCard={setAppliedGiftCard}
+          onRemoveGiftCard={() => setAppliedGiftCard(null)}
         />
       </div>
 
       <div className="lg:col-start-1 lg:row-start-2">
+        {allDigital && state?.message ? (
+          <p className="mb-3 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+            {state.message}
+          </p>
+        ) : null}
         <ContinueButton
           disabled={
             (fulfillment === "ship" && !addressId) ||
@@ -348,6 +397,11 @@ function Summary({
   appliedCode,
   onApplyCode,
   onRemoveCode,
+  appliedGiftCard,
+  giftCardApplied,
+  totalAfterDiscounts,
+  onApplyGiftCard,
+  onRemoveGiftCard,
 }: {
   items: CartItem[];
   subtotal: number;
@@ -355,11 +409,16 @@ function Summary({
   shipping: number;
   subtotalDiscount: number;
   total: number;
-  fulfillment: "ship" | "pickup";
+  fulfillment: "ship" | "pickup" | "digital";
   promos: ReturnType<typeof evaluatePromotions>;
   appliedCode: AppliedCode | null;
   onApplyCode: (a: AppliedCode) => void;
   onRemoveCode: () => void;
+  appliedGiftCard: AppliedGiftCard | null;
+  giftCardApplied: number;
+  totalAfterDiscounts: number;
+  onApplyGiftCard: (a: AppliedGiftCard) => void;
+  onRemoveGiftCard: () => void;
 }) {
   void rawShipping;
   return (
@@ -377,6 +436,8 @@ function Summary({
                     alt=""
                     className="h-full w-full object-cover"
                   />
+                ) : i.is_gift_card ? (
+                  <GiftCardThumb />
                 ) : null}
               </div>
               <div className="flex-1 text-sm">
@@ -406,6 +467,14 @@ function Summary({
             onRemove={onRemoveCode}
           />
         </div>
+        <div className="border-t border-border pt-3">
+          <GiftCardInput
+            previewTotal={totalAfterDiscounts}
+            applied={appliedGiftCard}
+            onApply={onApplyGiftCard}
+            onRemove={onRemoveGiftCard}
+          />
+        </div>
         <div className="space-y-2 border-t border-border pt-3 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Subtotal</span>
@@ -417,22 +486,47 @@ function Summary({
               <span className="font-medium">-{formatMXN(subtotalDiscount)}</span>
             </div>
           ) : null}
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">
-              Envío
-              {fulfillment === "pickup" ? (
-                <span className="ml-1 text-xs">(recoger en sucursal)</span>
-              ) : null}
-            </span>
-            <span className="font-medium">
-              {shipping === 0 ? "Gratis" : formatMXN(shipping)}
-            </span>
-          </div>
+          {fulfillment === "digital" ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">
+                Envío
+                <span className="ml-1 text-xs">(entrega por correo)</span>
+              </span>
+              <span className="font-medium">—</span>
+            </div>
+          ) : (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">
+                Envío
+                {fulfillment === "pickup" ? (
+                  <span className="ml-1 text-xs">(recoger en sucursal)</span>
+                ) : null}
+              </span>
+              <span className="font-medium">
+                {shipping === 0 ? "Gratis" : formatMXN(shipping)}
+              </span>
+            </div>
+          )}
+          {giftCardApplied > 0 ? (
+            <div className="flex justify-between text-emerald-700">
+              <span>Gift card aplicada</span>
+              <span className="font-medium">
+                -{formatMXN(giftCardApplied)}
+              </span>
+            </div>
+          ) : null}
         </div>
         <div className="flex items-baseline justify-between border-t border-border pt-3">
-          <span className="text-base font-semibold">Total</span>
+          <span className="text-base font-semibold">
+            {total === 0 && giftCardApplied > 0 ? "A pagar" : "Total"}
+          </span>
           <span className="text-xl font-bold">{formatMXN(total)}</span>
         </div>
+        {total === 0 && giftCardApplied > 0 ? (
+          <p className="rounded-md bg-emerald-50 p-2 text-xs text-emerald-900">
+            Tu gift card cubre el total — no se cobrará nada en MercadoPago.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -481,6 +575,27 @@ function AddressPreview({ address }: { address: Address }) {
         {address.city}, {address.state}
       </p>
     </div>
+  );
+}
+
+function DigitalDeliveryBanner() {
+  return (
+    <section className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+      <div className="flex items-start gap-3">
+        <Mail className="mt-0.5 h-5 w-5 shrink-0" />
+        <div>
+          <p className="font-semibold">Entrega digital</p>
+          <p className="text-sm text-emerald-900/80">
+            Tu pedido es solo gift cards por correo, así que no necesitamos
+            dirección de envío ni sucursal. Te enviamos los códigos al email
+            del destinatario apenas se confirme tu pago.
+          </p>
+        </div>
+      </div>
+      <p className="text-xs text-emerald-900/70">
+        No se aplica costo de envío.
+      </p>
+    </section>
   );
 }
 

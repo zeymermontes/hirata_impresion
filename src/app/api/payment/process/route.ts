@@ -111,6 +111,13 @@ export async function POST(req: NextRequest) {
         ? "pending"
         : "pending";
 
+  const { data: prevOrder } = await admin
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .maybeSingle();
+  const previousStatus = prevOrder?.status ?? null;
+
   await admin
     .from("orders")
     .update({
@@ -120,6 +127,16 @@ export async function POST(req: NextRequest) {
     })
     .eq("id", orderId);
 
+  if (newStatus !== previousStatus) {
+    await admin.from("order_status_history").insert({
+      order_id: orderId,
+      from_status: previousStatus,
+      to_status: newStatus,
+      changed_by_user_id: null,
+      source: "mp_process",
+    });
+  }
+
   if (mpResult.status === "approved") {
     const { data: cart } = await admin
       .from("carts")
@@ -128,6 +145,17 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
     if (cart) {
       await admin.from("cart_items").delete().eq("cart_id", cart.id);
+    }
+    // Issue gift cards for any gift-card items on this order. Idempotent
+    // — the webhook may also fire this, but the unique index on
+    // order_item_id makes the duplicate insert a no-op.
+    try {
+      const { issueGiftCardsForPaidOrder, redeemPendingGiftCardForOrder } =
+        await import("@/lib/gift-cards-server");
+      await redeemPendingGiftCardForOrder(orderId);
+      await issueGiftCardsForPaidOrder(orderId);
+    } catch (e) {
+      console.error("[payment/process] gift card hook failed:", e);
     }
   }
 

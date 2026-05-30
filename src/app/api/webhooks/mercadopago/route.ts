@@ -2,6 +2,10 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { mpPayment } from "@/lib/mercadopago";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  issueGiftCardsForPaidOrder,
+  redeemPendingGiftCardForOrder,
+} from "@/lib/gift-cards-server";
 
 /**
  * MercadoPago notifications endpoint (a.k.a. "webhook").
@@ -104,6 +108,15 @@ export async function POST(req: NextRequest) {
         ? "cancelled"
         : undefined; // pending/in_process leave the order in its current state
 
+  // Capture the previous status so we can write a history row only when the
+  // transition is real (MP retries the same webhook several times).
+  const { data: prev } = await admin
+    .from("orders")
+    .select("status")
+    .eq("id", orderId)
+    .maybeSingle();
+  const previousStatus = prev?.status ?? null;
+
   const update: {
     payment_id: string;
     payment_status: string;
@@ -121,6 +134,32 @@ export async function POST(req: NextRequest) {
   if (error) {
     console.error("[mp/webhook] failed to update order:", error);
     return NextResponse.json({ error: "DB update failed" }, { status: 500 });
+  }
+
+  if (newOrderStatus && newOrderStatus !== previousStatus) {
+    await admin.from("order_status_history").insert({
+      order_id: String(orderId),
+      from_status: previousStatus,
+      to_status: newOrderStatus,
+      changed_by_user_id: null,
+      source: "mp_webhook",
+    });
+  }
+
+  // On approval: (1) redeem any gift card the customer reserved at checkout
+  // and (2) issue new gift cards for any gift-card items in the order.
+  // Both idempotent so webhook + success-page races don't double-spend.
+  if (newOrderStatus === "paid") {
+    try {
+      await redeemPendingGiftCardForOrder(String(orderId));
+    } catch (e) {
+      console.error("[mp/webhook] gift card redemption failed:", e);
+    }
+    try {
+      await issueGiftCardsForPaidOrder(String(orderId));
+    } catch (e) {
+      console.error("[mp/webhook] gift card issuance failed:", e);
+    }
   }
 
   return NextResponse.json({ ok: true, order_id: orderId, status: payment.status });

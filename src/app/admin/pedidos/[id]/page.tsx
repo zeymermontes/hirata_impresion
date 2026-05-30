@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { StatusChanger } from "@/app/admin/pedidos/[id]/_components/status-changer";
 import { NotesForm } from "@/app/admin/pedidos/[id]/_components/notes-form";
+import { OrderStatusHistory } from "@/app/(storefront)/_components/order-status-history";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN } from "@/lib/utils";
@@ -202,7 +203,18 @@ export default async function AdminOrderDetailPage({
               <CardTitle>Entrega</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {order.fulfillment === "ship" && addr ? (
+              {order.fulfillment === "digital" ? (
+                <div className="flex items-start gap-3">
+                  <Store className="mt-0.5 h-4 w-4 text-primary" />
+                  <div>
+                    <p className="font-medium">Entrega digital</p>
+                    <p className="text-muted-foreground">
+                      Gift cards enviadas por correo al destinatario al
+                      confirmar el pago.
+                    </p>
+                  </div>
+                </div>
+              ) : order.fulfillment === "ship" && addr ? (
                 <div className="flex items-start gap-3">
                   <Truck className="mt-0.5 h-4 w-4 text-primary" />
                   <div>
@@ -268,6 +280,8 @@ export default async function AdminOrderDetailPage({
               <NotesForm orderId={order.id} initialNotes={order.notes} />
             </CardContent>
           </Card>
+
+          <OrderStatusHistory orderId={order.id} />
         </div>
 
         <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
@@ -340,6 +354,16 @@ function CustomizationSummary({ data }: { data: Record<string, unknown> }) {
   return (
     <dl className="mt-2 grid gap-1 rounded-md bg-muted/30 p-2 text-xs">
       {entries.map(([key, value]) => {
+        // The `gift_card` key holds a nested object — render its sub-fields
+        // legibly instead of `[object Object]`.
+        if (key === "gift_card" && value && typeof value === "object") {
+          return (
+            <GiftCardSummaryBlock
+              key={key}
+              value={value as Record<string, unknown>}
+            />
+          );
+        }
         if (key.endsWith("__url")) {
           return (
             <div key={key} className="flex gap-1.5">
@@ -367,5 +391,54 @@ function CustomizationSummary({ data }: { data: Record<string, unknown> }) {
         );
       })}
     </dl>
+  );
+}
+
+function GiftCardSummaryBlock({
+  value,
+}: {
+  value: Record<string, unknown>;
+}) {
+  const amount = Number(value.amount);
+  const delivery =
+    value.delivery_method === "physical" ? "Tarjeta física" : "Por correo";
+  const email =
+    typeof value.recipient_email === "string" && value.recipient_email
+      ? value.recipient_email
+      : null;
+  const name =
+    typeof value.recipient_name === "string" && value.recipient_name
+      ? value.recipient_name
+      : null;
+  const sender =
+    typeof value.sender_name === "string" && value.sender_name
+      ? value.sender_name
+      : null;
+  const message =
+    typeof value.message === "string" && value.message
+      ? value.message
+      : null;
+  return (
+    <div className="grid gap-0.5">
+      <p className="font-medium text-foreground">
+        Gift card · {delivery}
+        {Number.isFinite(amount) ? ` · $${amount.toFixed(2)}` : ""}
+      </p>
+      {name || email ? (
+        <p className="text-muted-foreground">
+          Para: {name ? `${name}` : ""}
+          {name && email ? " · " : ""}
+          {email ?? ""}
+        </p>
+      ) : null}
+      {sender ? (
+        <p className="text-muted-foreground">De: {sender}</p>
+      ) : null}
+      {message ? (
+        <p className="italic text-muted-foreground">
+          &ldquo;{message}&rdquo;
+        </p>
+      ) : null}
+    </div>
   );
 }

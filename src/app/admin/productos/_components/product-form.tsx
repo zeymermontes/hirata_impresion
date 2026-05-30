@@ -27,6 +27,9 @@ type Product = {
   is_customizable: boolean;
   requires_file: boolean;
   images: unknown;
+  is_gift_card?: boolean;
+  gift_card_min_amount?: number | null;
+  gift_card_max_amount?: number | null;
 };
 
 type Category = { id: string; name: string };
@@ -60,6 +63,13 @@ export function ProductForm({
   const [extraCategoryIds, setExtraCategoryIds] = useState<Set<string>>(
     new Set(additionalCategoryIds),
   );
+  // Drives which subsections of the form are visible. We persist this as
+  // the existing `is_gift_card` boolean on the products table so adding new
+  // product types later only needs another option here + a column.
+  const [productType, setProductType] = useState<"regular" | "gift_card">(
+    product?.is_gift_card ? "gift_card" : "regular",
+  );
+  const isGiftCard = productType === "gift_card";
 
   function toggleExtra(id: string) {
     setExtraCategoryIds((prev) => {
@@ -120,19 +130,55 @@ export function ProductForm({
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <div className="grid gap-2">
-          <Label htmlFor="base_price">Precio base (MXN)</Label>
-          <Input
-            id="base_price"
-            name="base_price"
-            type="number"
-            step="0.01"
-            min="0"
-            required
-            defaultValue={product?.base_price ?? "0"}
-          />
-        </div>
+      <fieldset className="space-y-2 rounded-md border border-primary/40 bg-primary/5 p-4">
+        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-primary">
+          Tipo de producto
+        </legend>
+        <Select
+          id="product_type"
+          value={productType}
+          onChange={(e) =>
+            setProductType(e.target.value as "regular" | "gift_card")
+          }
+        >
+          <option value="regular">Producto regular</option>
+          <option value="gift_card">Gift card</option>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {isGiftCard
+            ? "El cliente elige el monto en el checkout. No tiene precio base ni archivo."
+            : "Producto físico o digital con precio base, variantes y campos de personalización opcionales."}
+        </p>
+        {/* Drives `is_gift_card` on the products table from the selector
+            instead of a checkbox lower in the form. */}
+        <input
+          type="hidden"
+          name="is_gift_card"
+          value={isGiftCard ? "on" : ""}
+        />
+      </fieldset>
+
+      <div
+        className={
+          isGiftCard
+            ? "grid gap-4 sm:grid-cols-2"
+            : "grid gap-4 sm:grid-cols-3"
+        }
+      >
+        {isGiftCard ? null : (
+          <div className="grid gap-2">
+            <Label htmlFor="base_price">Precio base (MXN)</Label>
+            <Input
+              id="base_price"
+              name="base_price"
+              type="number"
+              step="0.01"
+              min="0"
+              required
+              defaultValue={product?.base_price ?? "0"}
+            />
+          </div>
+        )}
         <div className="grid gap-2">
           <Label htmlFor="category_id">Categoría principal</Label>
           <Select
@@ -161,6 +207,11 @@ export function ProductForm({
             <option value="archived">Archivado</option>
           </Select>
         </div>
+        {/* Send base_price=0 server-side for gift cards so the column
+            stays NOT NULL without showing the field. */}
+        {isGiftCard ? (
+          <input type="hidden" name="base_price" value="0" />
+        ) : null}
       </div>
 
       <fieldset className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
@@ -200,28 +251,63 @@ export function ProductForm({
         )}
       </fieldset>
 
-      <fieldset className="space-y-2 rounded-md border border-border bg-muted/30 p-4">
-        <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Personalización
-        </legend>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            name="is_customizable"
-            defaultChecked={product?.is_customizable ?? false}
-          />
-          Permite personalización en línea
-          <span className="text-xs text-muted-foreground">
-            (campos de texto, dropdowns, etc. — se configuran en Fase 3)
-          </span>
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            name="requires_file"
-            defaultChecked={product?.requires_file ?? false}
-          />
-          El cliente debe subir un archivo
-        </label>
-      </fieldset>
+      {isGiftCard ? (
+        <fieldset className="space-y-3 rounded-md border border-border bg-muted/30 p-4">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Rango de monto de la gift card
+          </legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="gift_card_min_amount">Monto mínimo ($)</Label>
+              <Input
+                id="gift_card_min_amount"
+                name="gift_card_min_amount"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={product?.gift_card_min_amount ?? 100}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="gift_card_max_amount">Monto máximo ($)</Label>
+              <Input
+                id="gift_card_max_amount"
+                name="gift_card_max_amount"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={product?.gift_card_max_amount ?? 10000}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            El cliente elegirá un monto dentro de este rango al comprar.
+          </p>
+        </fieldset>
+      ) : (
+        <fieldset className="space-y-2 rounded-md border border-border bg-muted/30 p-4">
+          <legend className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Personalización
+          </legend>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              name="is_customizable"
+              defaultChecked={product?.is_customizable ?? false}
+            />
+            Permite personalización en línea
+            <span className="text-xs text-muted-foreground">
+              (campos de texto, dropdowns, etc. — se configuran en Fase 3)
+            </span>
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              name="requires_file"
+              defaultChecked={product?.requires_file ?? false}
+            />
+            El cliente debe subir un archivo
+          </label>
+        </fieldset>
+      )}
 
       <MultiImageUpload
         name="images"

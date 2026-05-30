@@ -22,17 +22,19 @@ export default async function CheckoutPage() {
     quantity: number;
     unit_price: number;
     product_id: string;
+    customization: unknown;
     products: {
       name: string;
       images: unknown;
       category_id: string | null;
+      is_gift_card: boolean;
     } | null;
     product_variants: { name: string } | null;
   };
   const { data: itemsRaw } = await cart.supabase
     .from("cart_items")
     .select(
-      "id, quantity, unit_price, product_id, products!product_id(name, images, category_id), product_variants(name)",
+      "id, quantity, unit_price, product_id, customization, products!product_id(name, images, category_id, is_gift_card), product_variants(name)",
     )
     .eq("cart_id", cart.cartId)
     .order("created_at", { ascending: false });
@@ -81,6 +83,17 @@ export default async function CheckoutPage() {
     const imgs = Array.isArray(i.products?.images)
       ? (i.products?.images as string[])
       : [];
+    // Pull the gift-card delivery method out of the customization payload
+    // so the client can detect an all-email-gift-card cart and suppress
+    // the shipping picker.
+    const giftCardData =
+      i.customization && typeof i.customization === "object"
+        ? ((i.customization as Record<string, unknown>).gift_card as
+            | Record<string, unknown>
+            | undefined)
+        : undefined;
+    const delivery_method: "email" | "physical" =
+      giftCardData?.delivery_method === "physical" ? "physical" : "email";
     return {
       id: i.id,
       product_id: i.product_id,
@@ -91,6 +104,8 @@ export default async function CheckoutPage() {
       image_url: imgs[0] ?? null,
       category_id: i.products?.category_id ?? null,
       additional_category_ids: extraCatsByProduct.get(i.product_id) ?? [],
+      is_gift_card: Boolean(i.products?.is_gift_card),
+      delivery_method,
     };
   });
 

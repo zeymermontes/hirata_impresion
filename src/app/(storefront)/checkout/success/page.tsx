@@ -11,6 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { requireUser } from "@/lib/auth";
 import { mpPayment } from "@/lib/mercadopago";
+import {
+  issueGiftCardsForPaidOrder,
+  redeemPendingGiftCardForOrder,
+} from "@/lib/gift-cards-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatMXN, cn } from "@/lib/utils";
 
@@ -69,14 +73,26 @@ export default async function CheckoutSuccessPage({
       // Persist what we know on the order. Use admin client because the
       // RLS policy only lets admins update orders post-creation.
       const admin = createAdminClient();
+      const nextStatus =
+        payment.status === "approved" ? "paid" : order.status;
+      const previousStatus = order.status;
       await admin
         .from("orders")
         .update({
           payment_id: String(paymentId),
           payment_status: payment.status ?? "unknown",
-          status: payment.status === "approved" ? "paid" : order.status,
+          status: nextStatus,
         })
         .eq("id", order.id);
+      if (nextStatus !== previousStatus) {
+        await admin.from("order_status_history").insert({
+          order_id: order.id,
+          from_status: previousStatus,
+          to_status: nextStatus,
+          changed_by_user_id: null,
+          source: "checkout_success",
+        });
+      }
       // Clear the user's cart on approval.
       if (payment.status === "approved") {
         const { data: cart } = await admin
@@ -86,6 +102,24 @@ export default async function CheckoutSuccessPage({
           .maybeSingle();
         if (cart) {
           await admin.from("cart_items").delete().eq("cart_id", cart.id);
+        }
+        // Redeem any reserved gift card + issue new gift-card items.
+        // Both idempotent; safe if the webhook beat us.
+        try {
+          await redeemPendingGiftCardForOrder(order.id);
+        } catch (e) {
+          console.error(
+            "[checkout/success] gift card redemption failed:",
+            e,
+          );
+        }
+        try {
+          await issueGiftCardsForPaidOrder(order.id);
+        } catch (e) {
+          console.error(
+            "[checkout/success] gift card issuance failed:",
+            e,
+          );
         }
       }
     } catch (e) {

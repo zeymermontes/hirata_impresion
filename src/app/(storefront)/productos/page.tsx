@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { Search, Package } from "lucide-react";
+import { Search, Package, Gift } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/admin/empty-state";
 import { CategoryBannerCarousel } from "@/app/(storefront)/productos/_components/category-banner-carousel";
+import { GiftCardThumb } from "@/components/gift-card-thumb";
 import { createClient } from "@/lib/supabase/server";
 import { formatMXN, cn } from "@/lib/utils";
 
@@ -98,7 +99,9 @@ export default async function ProductsPage({
 
   let query = supabase
     .from("products")
-    .select("id, slug, name, base_price, images, is_customizable, requires_file")
+    .select(
+      "id, slug, name, base_price, images, is_customizable, requires_file, is_gift_card",
+    )
     .eq("status", "active")
     .order("created_at", { ascending: false });
   if (productIdFilter !== null) {
@@ -195,12 +198,19 @@ export default async function ProductsPage({
                           alt={p.name}
                           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                         />
+                      ) : p.is_gift_card ? (
+                        <GiftCardThumb showLabel />
                       ) : null}
                       <div className="absolute left-2 top-2 flex flex-wrap gap-1">
-                        {p.is_customizable ? (
+                        {p.is_gift_card ? (
+                          <Badge variant="default">
+                            <Gift className="h-3 w-3" /> Gift card
+                          </Badge>
+                        ) : null}
+                        {p.is_customizable && !p.is_gift_card ? (
                           <Badge variant="default">Personalizable</Badge>
                         ) : null}
-                        {p.requires_file ? (
+                        {p.requires_file && !p.is_gift_card ? (
                           <Badge variant="secondary">Sube tu diseño</Badge>
                         ) : null}
                       </div>
@@ -208,7 +218,9 @@ export default async function ProductsPage({
                     <div className="flex flex-1 flex-col p-4">
                       <h3 className="font-semibold leading-tight">{p.name}</h3>
                       <p className="mt-auto pt-2 text-lg font-bold">
-                        {formatMXN(Number(p.base_price))}
+                        {p.is_gift_card
+                          ? "Elige el monto"
+                          : formatMXN(Number(p.base_price))}
                       </p>
                     </div>
                   </Link>

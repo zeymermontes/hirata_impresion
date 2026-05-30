@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { Plus, Package } from "lucide-react";
+import { Plus, Package, Gift } from "lucide-react";
 import { AdminPageHeader } from "@/components/admin/page-header";
 import { EmptyState } from "@/components/admin/empty-state";
 import { DeleteButton } from "@/components/admin/delete-button";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { GiftCardThumb } from "@/components/gift-card-thumb";
 import {
   Table,
   TableBody,
@@ -39,6 +40,7 @@ type ProductListRow = {
   status: "draft" | "active" | "archived";
   images: unknown;
   category_id: string | null;
+  is_gift_card: boolean;
   categories: { name: string } | null;
 };
 
@@ -47,7 +49,7 @@ export default async function ProductsAdminPage() {
   const { data } = await supabase
     .from("products")
     .select(
-      "id, name, slug, base_price, status, images, category_id, categories!category_id(name)",
+      "id, name, slug, base_price, status, images, category_id, is_gift_card, categories!category_id(name)",
     )
     .order("created_at", { ascending: false });
   const products = (data ?? []) as unknown as ProductListRow[];
@@ -109,11 +111,20 @@ export default async function ProductsAdminPage() {
                             alt=""
                             className="h-full w-full object-cover"
                           />
+                        ) : p.is_gift_card ? (
+                          <GiftCardThumb />
                         ) : null}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <p className="font-medium">{p.name}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium">{p.name}</p>
+                        {p.is_gift_card ? (
+                          <Badge variant="muted">
+                            <Gift className="h-3 w-3" /> Gift card
+                          </Badge>
+                        ) : null}
+                      </div>
                       <p className="font-mono text-xs text-muted-foreground">
                         {p.slug}
                       </p>
@@ -121,8 +132,10 @@ export default async function ProductsAdminPage() {
                     <TableCell className="text-sm text-muted-foreground">
                       {p.categories?.name ?? "—"}
                     </TableCell>
-                    <TableCell className="font-medium">
-                      {formatMXN(Number(p.base_price))}
+                    <TableCell className="text-sm font-medium">
+                      {p.is_gift_card
+                        ? "Variable"
+                        : formatMXN(Number(p.base_price))}
                     </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_VARIANT[status]}>

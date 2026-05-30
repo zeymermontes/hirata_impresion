@@ -39,23 +39,15 @@ export async function addToCartAction(
 
     const { data: product } = await supabase
       .from("products")
-      .select("base_price, requires_file")
+      .select(
+        "base_price, requires_file, is_gift_card, gift_card_min_amount, gift_card_max_amount",
+      )
       .eq("id", parsed.data.product_id)
       .maybeSingle();
     if (!product) return { message: "Producto no encontrado." };
 
     if (product.requires_file && !parsed.data.uploaded_file_url) {
       return { message: "Este producto requiere que subas un archivo." };
-    }
-
-    let unitPrice = Number(product.base_price);
-    if (parsed.data.variant_id) {
-      const { data: variant } = await supabase
-        .from("product_variants")
-        .select("price_delta")
-        .eq("id", parsed.data.variant_id)
-        .maybeSingle();
-      if (variant) unitPrice += Number(variant.price_delta);
     }
 
     let customization: Json | null = null;
@@ -65,6 +57,48 @@ export async function addToCartAction(
       } catch {
         customization = null;
       }
+    }
+
+    let unitPrice = Number(product.base_price);
+
+    if (product.is_gift_card) {
+      // Gift cards: unit_price comes from the buyer-chosen amount in the
+      // customization payload, clamped to the product's min/max range.
+      const giftCardData =
+        customization && typeof customization === "object" && !Array.isArray(customization)
+          ? ((customization as Record<string, unknown>).gift_card as
+              | Record<string, unknown>
+              | undefined)
+          : undefined;
+      const amount = Number(giftCardData?.amount);
+      const deliveryMethod =
+        giftCardData?.delivery_method === "physical" ? "physical" : "email";
+      const recipient = String(giftCardData?.recipient_email ?? "").trim();
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return { message: "Elige un monto para la gift card." };
+      }
+      // Recipient email is required for email delivery; physical delivery
+      // ships to the order's shipping address, so it's optional.
+      if (deliveryMethod === "email") {
+        if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+          return { message: "Ingresa un email válido para el destinatario." };
+        }
+      }
+      const min = Number(product.gift_card_min_amount ?? 100);
+      const max = Number(product.gift_card_max_amount ?? 10000);
+      if (amount < min || amount > max) {
+        return {
+          message: `El monto debe estar entre ${min} y ${max} pesos.`,
+        };
+      }
+      unitPrice = amount;
+    } else if (parsed.data.variant_id) {
+      const { data: variant } = await supabase
+        .from("product_variants")
+        .select("price_delta")
+        .eq("id", parsed.data.variant_id)
+        .maybeSingle();
+      if (variant) unitPrice += Number(variant.price_delta);
     }
 
     const { error } = await supabase.from("cart_items").insert({

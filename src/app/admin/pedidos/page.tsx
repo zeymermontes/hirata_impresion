@@ -167,7 +167,11 @@ export default async function AdminOrdersPage({
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">
-                        {o.fulfillment === "ship" ? "Envío" : "Recoger"}
+                        {o.fulfillment === "ship"
+                          ? "Envío"
+                          : o.fulfillment === "digital"
+                            ? "Digital"
+                            : "Recoger"}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-semibold">

@@ -25,6 +25,7 @@ import {
   OrderAppliedPromotions,
   parseAppliedPromotions,
 } from "@/app/(storefront)/_components/order-promotions";
+import { OrderStatusHistory } from "@/app/(storefront)/_components/order-status-history";
 
 export const metadata = { title: "Pedido" };
 export const dynamic = "force-dynamic";
@@ -274,7 +275,18 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
           <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Entrega
           </h3>
-          {order.fulfillment === "ship" && addr ? (
+          {order.fulfillment === "digital" ? (
+            <div className="flex items-start gap-3">
+              <Store className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <p className="font-medium">Entrega digital</p>
+                <p className="text-muted-foreground">
+                  Las gift cards se envían por correo al destinatario apenas
+                  se confirma el pago.
+                </p>
+              </div>
+            </div>
+          ) : order.fulfillment === "ship" && addr ? (
             <div className="flex items-start gap-3">
               <Truck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
               <div className="min-w-0">
@@ -332,6 +344,8 @@ export default async function OrderDetailPage({ params }: { params: Params }) {
           ) : null}
         </CardContent>
       </Card>
+
+      <OrderStatusHistory orderId={order.id} />
     </div>
   );
 }
@@ -396,6 +410,14 @@ function CustomizationSummary({ data }: { data: Record<string, unknown> }) {
   return (
     <dl className="mt-2 grid gap-1 rounded-md bg-muted/30 p-2 text-xs">
       {entries.map(([key, value]) => {
+        if (key === "gift_card" && value && typeof value === "object") {
+          return (
+            <GiftCardSummaryBlock
+              key={key}
+              value={value as Record<string, unknown>}
+            />
+          );
+        }
         if (key.endsWith("__url")) {
           return (
             <div key={key} className="flex gap-1.5">
@@ -425,5 +447,54 @@ function CustomizationSummary({ data }: { data: Record<string, unknown> }) {
         );
       })}
     </dl>
+  );
+}
+
+function GiftCardSummaryBlock({
+  value,
+}: {
+  value: Record<string, unknown>;
+}) {
+  const amount = Number(value.amount);
+  const delivery =
+    value.delivery_method === "physical" ? "Tarjeta física" : "Por correo";
+  const email =
+    typeof value.recipient_email === "string" && value.recipient_email
+      ? value.recipient_email
+      : null;
+  const name =
+    typeof value.recipient_name === "string" && value.recipient_name
+      ? value.recipient_name
+      : null;
+  const sender =
+    typeof value.sender_name === "string" && value.sender_name
+      ? value.sender_name
+      : null;
+  const message =
+    typeof value.message === "string" && value.message
+      ? value.message
+      : null;
+  return (
+    <div className="grid gap-0.5">
+      <p className="font-medium text-foreground">
+        Gift card · {delivery}
+        {Number.isFinite(amount) ? ` · $${amount.toFixed(2)}` : ""}
+      </p>
+      {name || email ? (
+        <p className="break-words text-muted-foreground">
+          Para: {name ? `${name}` : ""}
+          {name && email ? " · " : ""}
+          {email ?? ""}
+        </p>
+      ) : null}
+      {sender ? (
+        <p className="text-muted-foreground">De: {sender}</p>
+      ) : null}
+      {message ? (
+        <p className="italic text-muted-foreground">
+          &ldquo;{message}&rdquo;
+        </p>
+      ) : null}
+    </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   LandingCarousel,
   type CarouselSlide,
 } from "@/app/(storefront)/_components/landing-carousel";
+import { GiftCardThumb } from "@/components/gift-card-thumb";
 
 export const revalidate = 60;
 
@@ -45,6 +46,7 @@ type FeaturedProduct = {
   name: string;
   base_price: number;
   images: unknown;
+  is_gift_card: boolean;
 };
 
 type PreloadedData = {
@@ -156,7 +158,7 @@ export default async function HomePage() {
     fallbackProductsCount > 0
       ? supabase
           .from("products")
-          .select("id, slug, name, base_price, images")
+          .select("id, slug, name, base_price, images, is_gift_card")
           .eq("status", "active")
           .order("created_at", { ascending: false })
           .limit(fallbackProductsCount)
@@ -554,12 +556,16 @@ function FeaturedProducts({
                       alt={p.name}
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
+                  ) : p.is_gift_card ? (
+                    <GiftCardThumb showLabel />
                   ) : null}
                 </div>
                 <div className="flex flex-1 flex-col p-4">
                   <h3 className="font-semibold leading-tight">{p.name}</h3>
                   <p className="mt-auto pt-2 text-lg font-bold">
-                    {formatMXN(Number(p.base_price))}
+                    {p.is_gift_card
+                      ? "Elige el monto"
+                      : formatMXN(Number(p.base_price))}
                   </p>
                 </div>
               </Link>

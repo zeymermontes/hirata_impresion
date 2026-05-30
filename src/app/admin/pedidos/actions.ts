@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { runAction } from "@/lib/server-action";
+import {
+  issueGiftCardsForPaidOrder,
+  redeemPendingGiftCardForOrder,
+} from "@/lib/gift-cards-server";
 
 const ORDER_STATUSES = [
   "pending",
@@ -53,7 +57,18 @@ export async function updateOrderStatusAction(
       return { errors: z.flattenError(parsed.error).fieldErrors };
     }
 
-    const { supabase } = await requireAdmin();
+    const { supabase, user } = await requireAdmin();
+
+    // Capture the previous status BEFORE we mutate so we can detect the
+    // pending → paid transition and audit the change with the right
+    // from_status.
+    const { data: prev } = await supabase
+      .from("orders")
+      .select("status, payment_status")
+      .eq("id", orderId)
+      .maybeSingle();
+    const previousStatus = prev?.status ?? null;
+
     // Only persist tracking fields if status is shipped/delivered. Otherwise
     // clear them — moving an order back to "in_production" shouldn't leave
     // stale tracking data visible to the customer.
@@ -63,6 +78,7 @@ export async function updateOrderStatusAction(
       status: (typeof ORDER_STATUSES)[number];
       tracking_number?: string | null;
       carrier?: string | null;
+      payment_status?: string;
     } = { status: parsed.data.status };
     if (keepsTracking) {
       update.tracking_number = parsed.data.tracking_number ?? null;
@@ -71,12 +87,50 @@ export async function updateOrderStatusAction(
       update.tracking_number = null;
       update.carrier = null;
     }
+    // When the admin flips to 'paid' manually, also flip the MP payment
+    // status — otherwise the order would still look "pending payment" in
+    // the customer's view.
+    const becomingPaid =
+      parsed.data.status === "paid" && previousStatus !== "paid";
+    if (becomingPaid && prev?.payment_status !== "approved") {
+      update.payment_status = "approved";
+    }
 
     const { error } = await supabase
       .from("orders")
       .update(update)
       .eq("id", orderId);
     if (error) return { message: error.message };
+
+    // Audit log: who flipped the status and from where. recordOrderStatusChange
+    // reads the *current* status, but we already updated it — pass the
+    // previous status via a quick admin-side fetch is overkill, so just
+    // insert directly here.
+    if (previousStatus !== parsed.data.status) {
+      await supabase.from("order_status_history").insert({
+        order_id: orderId,
+        from_status: previousStatus,
+        to_status: parsed.data.status,
+        changed_by_user_id: user.id,
+        source: "admin",
+      });
+    }
+
+    // If we just promoted the order to paid, run the gift-card pipeline:
+    // redeem any reserved card, issue new ones, send buyer confirmation.
+    // All idempotent so re-running is safe.
+    if (becomingPaid) {
+      try {
+        await redeemPendingGiftCardForOrder(orderId);
+      } catch (e) {
+        console.error("[admin/pedidos] redeem failed:", e);
+      }
+      try {
+        await issueGiftCardsForPaidOrder(orderId);
+      } catch (e) {
+        console.error("[admin/pedidos] issuance failed:", e);
+      }
+    }
 
     revalidatePath("/admin/pedidos");
     revalidatePath(`/admin/pedidos/${orderId}`);

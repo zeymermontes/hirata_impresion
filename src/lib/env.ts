@@ -26,5 +26,9 @@ export function serverOnlyEnv() {
     ),
     MERCADOPAGO_ACCESS_TOKEN: process.env.MERCADOPAGO_ACCESS_TOKEN ?? "",
     MERCADOPAGO_WEBHOOK_SECRET: process.env.MERCADOPAGO_WEBHOOK_SECRET ?? "",
+    RESEND_API_KEY: process.env.RESEND_API_KEY ?? "",
+    // Verified domain or `Acme <onboarding@resend.dev>` for testing.
+    EMAIL_FROM:
+      process.env.EMAIL_FROM ?? "Hirata Impresión Digital <onboarding@resend.dev>",
   };
 }

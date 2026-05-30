@@ -20,6 +20,9 @@ const ProductSchema = z.object({
   status: z.enum(["draft", "active", "archived"]),
   is_customizable: z.coerce.boolean().optional(),
   requires_file: z.coerce.boolean().optional(),
+  is_gift_card: z.coerce.boolean().optional(),
+  gift_card_min_amount: z.coerce.number().min(1).optional().nullable(),
+  gift_card_max_amount: z.coerce.number().min(1).optional().nullable(),
   images: z.array(z.string()).default([]),
 });
 
@@ -64,6 +67,9 @@ function parseProductForm(
     status: formData.get("status") || "draft",
     is_customizable: formData.get("is_customizable") === "on",
     requires_file: formData.get("requires_file") === "on",
+    is_gift_card: formData.get("is_gift_card") === "on",
+    gift_card_min_amount: formData.get("gift_card_min_amount") || null,
+    gift_card_max_amount: formData.get("gift_card_max_amount") || null,
     images,
   });
   if (!parsed.success) {

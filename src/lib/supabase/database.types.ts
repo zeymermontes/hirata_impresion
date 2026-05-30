@@ -19,7 +19,8 @@ export type OrderStatus =
   | "shipped"
   | "delivered"
   | "cancelled";
-export type Fulfillment = "ship" | "pickup";
+export type Fulfillment = "ship" | "pickup" | "digital";
+export type GiftCardDeliveryMethod = "email" | "physical";
 export type CustomizationFieldType =
   | "text"
   | "textarea"
@@ -163,6 +164,9 @@ export interface Database {
           status: ProductStatus;
           images: Json;
           template_config: Json | null;
+          is_gift_card: boolean;
+          gift_card_min_amount: number | null;
+          gift_card_max_amount: number | null;
           created_at: string;
           updated_at: string;
         },
@@ -178,6 +182,9 @@ export interface Database {
           status?: ProductStatus;
           images?: Json;
           template_config?: Json | null;
+          is_gift_card?: boolean;
+          gift_card_min_amount?: number | null;
+          gift_card_max_amount?: number | null;
           created_at?: string;
           updated_at?: string;
         }
@@ -345,6 +352,8 @@ export interface Database {
           notes: string | null;
           discount_amount: number;
           applied_promotions: Json | null;
+          gift_card_amount: number;
+          gift_card_id: string | null;
           created_at: string;
           updated_at: string;
         },
@@ -366,6 +375,8 @@ export interface Database {
           notes?: string | null;
           discount_amount?: number;
           applied_promotions?: Json | null;
+          gift_card_amount?: number;
+          gift_card_id?: string | null;
           created_at?: string;
           updated_at?: string;
         }
@@ -460,6 +471,84 @@ export interface Database {
           active?: boolean;
           created_at?: string;
           updated_at?: string;
+        }
+      >;
+      gift_cards: Table<
+        {
+          id: string;
+          code: string;
+          initial_amount: number;
+          balance: number;
+          recipient_email: string | null;
+          recipient_name: string | null;
+          sender_name: string | null;
+          message: string | null;
+          issued_to_user_id: string | null;
+          order_id: string | null;
+          order_item_id: string | null;
+          expires_at: string | null;
+          delivered_at: string | null;
+          active: boolean;
+          delivery_method: GiftCardDeliveryMethod;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          code: string;
+          initial_amount: number;
+          balance: number;
+          recipient_email?: string | null;
+          recipient_name?: string | null;
+          sender_name?: string | null;
+          message?: string | null;
+          issued_to_user_id?: string | null;
+          order_id?: string | null;
+          order_item_id?: string | null;
+          expires_at?: string | null;
+          delivered_at?: string | null;
+          active?: boolean;
+          delivery_method?: GiftCardDeliveryMethod;
+          created_at?: string;
+          updated_at?: string;
+        }
+      >;
+      gift_card_redemptions: Table<
+        {
+          id: string;
+          gift_card_id: string;
+          order_id: string;
+          amount: number;
+          created_at: string;
+        },
+        {
+          id?: string;
+          gift_card_id: string;
+          order_id: string;
+          amount: number;
+          created_at?: string;
+        }
+      >;
+      order_status_history: Table<
+        {
+          id: string;
+          order_id: string;
+          from_status: OrderStatus | null;
+          to_status: OrderStatus;
+          changed_by_user_id: string | null;
+          source: string;
+          note: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          order_id: string;
+          from_status?: OrderStatus | null;
+          to_status: OrderStatus;
+          changed_by_user_id?: string | null;
+          source: string;
+          note?: string | null;
+          created_at?: string;
         }
       >;
       promotion_rules: Table<

@@ -24,6 +24,16 @@ import {
   validatePromoCode,
   incrementCodeUsage,
 } from "@/lib/promo-codes-server";
+import {
+  type GiftCard,
+  applicableAmount,
+  normalizeCode,
+} from "@/lib/gift-cards";
+import {
+  validateGiftCard,
+  redeemPendingGiftCardForOrder,
+  issueGiftCardsForPaidOrder,
+} from "@/lib/gift-cards-server";
 import type { Json } from "@/lib/supabase/database.types";
 
 const SHIPPING_FLAT_MXN = 100;
@@ -36,6 +46,10 @@ const CheckoutSchema = z.discriminatedUnion("fulfillment", [
   z.object({
     fulfillment: z.literal("pickup"),
     branch_id: z.string().uuid("Selecciona una sucursal"),
+  }),
+  z.object({
+    // Email-delivered gift cards only — no address, no branch, no shipping.
+    fulfillment: z.literal("digital"),
   }),
 ]);
 
@@ -53,7 +67,11 @@ type CartItemRow = {
   customization: unknown;
   uploaded_file_url: string | null;
   preview_url: string | null;
-  products: { name: string; category_id: string | null } | null;
+  products: {
+    name: string;
+    category_id: string | null;
+    is_gift_card: boolean;
+  } | null;
   product_variants: { name: string } | null;
 };
 
@@ -86,17 +104,39 @@ export async function createOrderAction(
     const { data: itemsRaw } = await cart.supabase
       .from("cart_items")
       .select(
-        "id, product_id, variant_id, quantity, unit_price, customization, uploaded_file_url, preview_url, products!product_id(name, category_id), product_variants(name)",
+        "id, product_id, variant_id, quantity, unit_price, customization, uploaded_file_url, preview_url, products!product_id(name, category_id, is_gift_card), product_variants(name)",
       )
       .eq("cart_id", cart.cartId);
     const items = (itemsRaw ?? []) as unknown as CartItemRow[];
     if (items.length === 0) return { message: "Tu carrito está vacío." };
 
+    // Detect an all-digital cart (every item is an email-delivered gift
+    // card). When so, fulfillment must be "digital" and no shipping or
+    // address is collected.
+    const allDigital = items.every((i) => {
+      if (!i.products?.is_gift_card) return false;
+      const gc =
+        i.customization && typeof i.customization === "object"
+          ? ((i.customization as Record<string, unknown>).gift_card as
+              | Record<string, unknown>
+              | undefined)
+          : undefined;
+      return gc?.delivery_method !== "physical";
+    });
+
     let addressSnapshot: Json | null = null;
     let branchId: string | null = null;
     let rawShipping = 0;
 
-    if (parsed.data.fulfillment === "ship") {
+    if (parsed.data.fulfillment === "digital") {
+      if (!allDigital) {
+        return {
+          message:
+            "Tu pedido tiene productos físicos. Elige envío o recoger en sucursal.",
+        };
+      }
+      // No address, no branch, no shipping.
+    } else if (parsed.data.fulfillment === "ship") {
       const { data: addr } = await supabase
         .from("addresses")
         .select("*")
@@ -192,7 +232,30 @@ export async function createOrderAction(
       (appliedCode
         ? appliedCode.discount - (appliedCode.free_shipping ? rawShipping : 0)
         : 0);
-    const total = round2(subtotal + shippingCost - subtotalDiscount);
+    const totalAfterDiscounts = round2(
+      subtotal + shippingCost - subtotalDiscount,
+    );
+
+    // Gift card redemption. We validate now and *reserve* the amount on the
+    // order (gift_card_id + gift_card_amount), but only decrement the card's
+    // balance when payment is confirmed. This prevents an abandoned order
+    // from burning a code.
+    const rawGiftCode = formData.get("gift_card_code");
+    let appliedGiftCard: { card: GiftCard; amount: number } | null = null;
+    if (typeof rawGiftCode === "string" && rawGiftCode.trim()) {
+      const validation = await validateGiftCard(normalizeCode(rawGiftCode));
+      if (validation.ok && totalAfterDiscounts > 0) {
+        const amount = applicableAmount(
+          validation.card.balance,
+          totalAfterDiscounts,
+        );
+        if (amount > 0) {
+          appliedGiftCard = { card: validation.card, amount };
+        }
+      }
+    }
+    const giftCardAmount = appliedGiftCard?.amount ?? 0;
+    const total = round2(totalAfterDiscounts - giftCardAmount);
 
     // Merge rule + code snapshots into a single JSON column on the order.
     const snapshotList: AppliedPromotionSnapshot[] = [
@@ -230,23 +293,33 @@ export async function createOrderAction(
       );
     }
 
+    // If the gift card covers 100% of the order, mark it paid up-front and
+    // skip the MercadoPago hop entirely.
+    const fullyCoveredByGiftCard = total === 0 && giftCardAmount > 0;
+    const initialStatus: "pending" | "paid" = fullyCoveredByGiftCard
+      ? "paid"
+      : "pending";
+
     const { data: order, error: orderErr } = await supabase
       .from("orders")
       .insert({
         user_id: user.id,
-        status: "pending",
+        status: initialStatus,
         subtotal,
         shipping_cost: shippingCost,
         total,
         fulfillment: parsed.data.fulfillment,
         address_snapshot: addressSnapshot,
         branch_id: branchId,
-        payment_provider: "mercadopago",
+        payment_provider: fullyCoveredByGiftCard ? "gift_card" : "mercadopago",
+        payment_status: fullyCoveredByGiftCard ? "approved" : null,
         discount_amount: round2(subtotalDiscount),
         applied_promotions:
           snapshotList.length > 0
             ? (snapshotList as unknown as Json)
             : null,
+        gift_card_id: appliedGiftCard?.card.id ?? null,
+        gift_card_amount: round2(giftCardAmount),
       })
       .select("id, total")
       .single();
@@ -270,9 +343,47 @@ export async function createOrderAction(
       .insert(orderItemsInsert);
     if (itemsErr) return { message: itemsErr.message };
 
+    // Seed the status-history timeline so the order detail page has at
+    // least one row from the moment of creation. order_status_history is
+    // admin-write RLS, so we bypass with the service-role client.
+    try {
+      const { createAdminClient } = await import("@/lib/supabase/admin");
+      await createAdminClient()
+        .from("order_status_history")
+        .insert({
+          order_id: order.id,
+          from_status: null,
+          to_status: initialStatus,
+          changed_by_user_id: null,
+          source: "checkout_create",
+        });
+    } catch (e) {
+      console.error("[checkout] history insert failed:", e);
+    }
+
     if (appliedCode) {
       // Best-effort — usage increments don't gate the redirect.
       await incrementCodeUsage(appliedCode.promo.id);
+    }
+
+    // 100%-gift-card orders skip MP: redeem the card + issue any gift-card
+    // items on the order right now, then send the customer to /success as
+    // if the payment had already cleared.
+    if (fullyCoveredByGiftCard) {
+      try {
+        await redeemPendingGiftCardForOrder(order.id);
+      } catch (e) {
+        console.error("[checkout] gift card redemption failed:", e);
+      }
+      try {
+        await issueGiftCardsForPaidOrder(order.id);
+      } catch (e) {
+        console.error("[checkout] gift card issuance failed:", e);
+      }
+      await clearUserCart();
+      revalidatePath("/carrito");
+      revalidatePath("/mi-cuenta/pedidos");
+      redirect(`/checkout/success?order=${order.id}&status=approved`);
     }
 
     await clearUserCart();
@@ -376,6 +487,30 @@ export type ValidatePromoCodeResult =
  * summary can preview the new total. The server re-validates on actual order
  * creation, so this is purely advisory.
  */
+export async function validateGiftCardAction(input: {
+  code: string;
+  preview_total: number;
+}): Promise<
+  | { ok: true; card: GiftCard; applicable_amount: number }
+  | { ok: false; message: string }
+> {
+  const validation = await validateGiftCard(input.code);
+  if (!validation.ok) return validation;
+  return {
+    ok: true,
+    card: validation.card,
+    applicable_amount: applicableAmount(
+      validation.card.balance,
+      input.preview_total,
+    ),
+  };
+}
+
+// Re-exported for the client component's typing.
+export type ValidateGiftCardActionResult = Awaited<
+  ReturnType<typeof validateGiftCardAction>
+>;
+
 export async function validatePromoCodeAction(input: {
   code: string;
   cart_subtotal: number;

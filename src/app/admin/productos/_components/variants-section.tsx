@@ -15,6 +15,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -68,6 +69,9 @@ export function VariantsSection({
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -93,7 +97,7 @@ export function VariantsSection({
     <div className="space-y-4">
       {items.length > 0 ? (
         <div className="overflow-hidden rounded-md border border-border">
-          <div className="grid grid-cols-[2rem_2fr_1fr_1fr_1fr_5rem] items-center gap-3 border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="hidden sm:grid grid-cols-[2rem_2fr_1fr_1fr_1fr_5rem] items-center gap-3 border-b border-border bg-muted/40 px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             <span />
             <span>Nombre</span>
             <span>Δ Precio</span>
@@ -168,43 +172,68 @@ function SortableVariantRow({
     );
   }
 
+  const grip = (
+    <button
+      type="button"
+      aria-label="Reordenar"
+      {...attributes}
+      {...listeners}
+      style={{ touchAction: "none" }}
+      className="inline-flex h-8 w-8 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
+    >
+      <GripVertical className="h-4 w-4" />
+    </button>
+  );
+
+  const actions = (
+    <div className="flex items-center justify-end gap-0.5">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        aria-label="Editar"
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground hover:bg-muted"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </button>
+      <DeleteVariantButton productId={productId} variantId={variant.id} />
+    </div>
+  );
+
+  const priceLabel = `${Number(variant.price_delta) > 0 ? "+" : ""}${formatMXN(Number(variant.price_delta))}`;
+
   return (
     <li
       ref={setNodeRef}
       style={style}
       className={cn(
-        "grid grid-cols-[2rem_2fr_1fr_1fr_1fr_5rem] items-center gap-3 px-3 py-2 hover:bg-muted/20",
+        "hover:bg-muted/20",
         isDragging && "z-10 bg-background shadow-lg",
       )}
     >
-      <button
-        type="button"
-        aria-label="Reordenar"
-        {...attributes}
-        {...listeners}
-        className="inline-flex h-8 w-8 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <span className="truncate text-sm font-medium">{variant.name}</span>
-      <span className="text-sm">
-        {Number(variant.price_delta) > 0 ? "+" : ""}
-        {formatMXN(Number(variant.price_delta))}
-      </span>
-      <span className="truncate font-mono text-xs text-muted-foreground">
-        {variant.sku ?? "—"}
-      </span>
-      <span className="text-sm">{variant.stock ?? "∞"}</span>
-      <div className="flex items-center justify-end gap-0.5">
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          aria-label="Editar"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground hover:bg-muted"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <DeleteVariantButton productId={productId} variantId={variant.id} />
+      {/* Mobile: stacked layout */}
+      <div className="flex items-start gap-2 px-3 py-2 sm:hidden">
+        {grip}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{variant.name}</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+            <span>{priceLabel}</span>
+            <span className="truncate font-mono">{variant.sku ?? "—"}</span>
+            <span>Stock: {variant.stock ?? "∞"}</span>
+          </div>
+        </div>
+        {actions}
+      </div>
+
+      {/* Desktop: column grid */}
+      <div className="hidden sm:grid grid-cols-[2rem_2fr_1fr_1fr_1fr_5rem] items-center gap-3 px-3 py-2">
+        {grip}
+        <span className="truncate text-sm font-medium">{variant.name}</span>
+        <span className="text-sm">{priceLabel}</span>
+        <span className="truncate font-mono text-xs text-muted-foreground">
+          {variant.sku ?? "—"}
+        </span>
+        <span className="text-sm">{variant.stock ?? "∞"}</span>
+        {actions}
       </div>
     </li>
   );
@@ -232,9 +261,9 @@ function EditVariantForm({
   return (
     <form
       action={formAction}
-      className="grid grid-cols-[2rem_2fr_1fr_1fr_1fr_5rem] items-end gap-3 px-3 py-3"
+      className="grid gap-3 px-3 py-3 sm:grid-cols-[2rem_2fr_1fr_1fr_1fr_5rem] sm:items-end"
     >
-      <div />
+      <div className="hidden sm:block" />
       <div className="grid gap-1">
         <Label htmlFor={`edit-name-${variant.id}`} className="text-xs">
           Nombre
@@ -291,7 +320,7 @@ function EditVariantForm({
         </button>
       </div>
       {state?.message ? (
-        <p className="col-span-6 text-xs text-destructive">{state.message}</p>
+        <p className="text-xs text-destructive sm:col-span-6">{state.message}</p>
       ) : null}
     </form>
   );

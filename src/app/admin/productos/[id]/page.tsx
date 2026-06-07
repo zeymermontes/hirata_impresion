@@ -117,7 +117,24 @@ export default async function EditProductPage({
             <CardContent>
               <CustomizationFieldsSection
                 productId={product.id}
-                fields={customFields ?? []}
+                fields={(customFields ?? []).map((f) => ({
+                  id: f.id,
+                  type: f.type,
+                  name: f.name,
+                  label: f.label,
+                  required: f.required,
+                  options: f.options,
+                  price_delta_rules: f.price_delta_rules,
+                  visible_variant_ids: Array.isArray(f.visible_variant_ids)
+                    ? (f.visible_variant_ids as unknown[]).filter(
+                        (v): v is string => typeof v === "string",
+                      )
+                    : [],
+                }))}
+                variants={(variants ?? []).map((v) => ({
+                  id: v.id,
+                  name: v.name,
+                }))}
               />
             </CardContent>
           </Card>

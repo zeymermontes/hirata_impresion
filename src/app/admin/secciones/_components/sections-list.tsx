@@ -14,6 +14,7 @@ import {
   closestCenter,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -55,6 +56,9 @@ export function SectionsList({ sections }: { sections: Section[] }) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
     }),
@@ -170,6 +174,7 @@ function SectionRow({
         aria-label="Reordenar"
         {...attributes}
         {...listeners}
+        style={{ touchAction: "none" }}
         className="inline-flex h-8 w-8 cursor-grab items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground active:cursor-grabbing"
       >
         <GripVertical className="h-4 w-4" />

@@ -23,6 +23,7 @@ export type CustomField = {
   required: boolean;
   options: string[] | null;
   price_delta_rules: Record<string, number> | null;
+  visible_variant_ids: string[];
 };
 
 export type Zone = {
@@ -64,6 +65,7 @@ export function parseCustomField(raw: {
   required: boolean;
   options: unknown;
   price_delta_rules: unknown;
+  visible_variant_ids?: unknown;
 }): CustomField {
   return {
     id: raw.id,
@@ -76,7 +78,28 @@ export function parseCustomField(raw: {
       raw.price_delta_rules && typeof raw.price_delta_rules === "object"
         ? (raw.price_delta_rules as Record<string, number>)
         : null,
+    visible_variant_ids: Array.isArray(raw.visible_variant_ids)
+      ? (raw.visible_variant_ids as unknown[]).filter(
+          (v): v is string => typeof v === "string",
+        )
+      : [],
   };
+}
+
+/**
+ * Filter a field list down to those that should render for the currently
+ * selected variant. A field with `visible_variant_ids = []` is always
+ * shown; otherwise the variant id must be in the list. Used by both the
+ * storefront customizer and any price/preview that key off active fields.
+ */
+export function visibleFieldsForVariant(
+  fields: CustomField[],
+  variantId: string | null,
+): CustomField[] {
+  return fields.filter((f) => {
+    if (!f.visible_variant_ids.length) return true;
+    return variantId !== null && f.visible_variant_ids.includes(variantId);
+  });
 }
 
 /**

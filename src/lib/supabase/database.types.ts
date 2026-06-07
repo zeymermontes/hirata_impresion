@@ -220,6 +220,7 @@ export interface Database {
           options: Json | null;
           price_delta_rules: Json | null;
           sort_order: number;
+          visible_variant_ids: Json;
         },
         {
           id?: string;
@@ -231,6 +232,7 @@ export interface Database {
           options?: Json | null;
           price_delta_rules?: Json | null;
           sort_order?: number;
+          visible_variant_ids?: Json;
         }
       >;
       banners: Table<

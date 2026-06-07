@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { useFormStatus } from "react-dom";
 import { Plus, Trash2, Type, AlignLeft, Hash, List, Upload } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   addCustomizationFieldAction,
   deleteCustomizationFieldAction,
+  updateCustomizationFieldVisibilityAction,
   type CustomFieldActionState,
 } from "@/app/admin/productos/actions";
 import { slugify } from "@/lib/slugify";
@@ -26,7 +27,10 @@ type CustomField = {
   required: boolean;
   options: unknown;
   price_delta_rules: unknown;
+  visible_variant_ids: string[];
 };
+
+type VariantOption = { id: string; name: string };
 
 const TYPE_META: Record<CustomField["type"], { label: string; icon: React.ComponentType<{ className?: string }> }> = {
   text: { label: "Texto corto", icon: Type },
@@ -39,16 +43,23 @@ const TYPE_META: Record<CustomField["type"], { label: string; icon: React.Compon
 export function CustomizationFieldsSection({
   productId,
   fields,
+  variants,
 }: {
   productId: string;
   fields: CustomField[];
+  variants: VariantOption[];
 }) {
   return (
     <div className="space-y-4">
       {fields.length > 0 ? (
         <ul className="divide-y divide-border rounded-md border border-border">
           {fields.map((f) => (
-            <FieldRow key={f.id} productId={productId} field={f} />
+            <FieldRow
+              key={f.id}
+              productId={productId}
+              field={f}
+              variants={variants}
+            />
           ))}
         </ul>
       ) : (
@@ -58,7 +69,7 @@ export function CustomizationFieldsSection({
         </p>
       )}
 
-      <AddFieldForm productId={productId} />
+      <AddFieldForm productId={productId} variants={variants} />
     </div>
   );
 }
@@ -66,9 +77,11 @@ export function CustomizationFieldsSection({
 function FieldRow({
   productId,
   field,
+  variants,
 }: {
   productId: string;
   field: CustomField;
+  variants: VariantOption[];
 }) {
   const Icon = TYPE_META[field.type].icon;
   const options = Array.isArray(field.options) ? (field.options as string[]) : [];
@@ -79,7 +92,7 @@ function FieldRow({
       <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-muted text-foreground">
         <Icon className="h-4 w-4" />
       </div>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{field.label}</span>
           <Badge variant="muted">{TYPE_META[field.type].label}</Badge>
@@ -108,9 +121,132 @@ function FieldRow({
             ))}
           </ul>
         ) : null}
+        {variants.length > 0 ? (
+          <VisibilityEditor
+            productId={productId}
+            field={field}
+            variants={variants}
+          />
+        ) : null}
       </div>
       <DeleteFieldButton productId={productId} fieldId={field.id} />
     </li>
+  );
+}
+
+function VisibilityEditor({
+  productId,
+  field,
+  variants,
+}: {
+  productId: string;
+  field: CustomField;
+  variants: VariantOption[];
+}) {
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState<string[]>(field.visible_variant_ids);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const allVariantIds = new Set(variants.map((v) => v.id));
+  // Server may still hold stale variant ids if a variant was deleted; show
+  // names only for live ones.
+  const liveSelected = field.visible_variant_ids.filter((id) =>
+    allVariantIds.has(id),
+  );
+  const summary =
+    liveSelected.length === 0
+      ? "Siempre"
+      : `Solo en ${variants
+          .filter((v) => liveSelected.includes(v.id))
+          .map((v) => v.name)
+          .join(", ")}`;
+
+  function toggle(id: string) {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function onSave() {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateCustomizationFieldVisibilityAction(
+        productId,
+        field.id,
+        selected,
+      );
+      if (!result.ok) {
+        setError(result.message ?? "No se pudo guardar");
+        return;
+      }
+      setEditing(false);
+    });
+  }
+
+  function onCancel() {
+    setSelected(field.visible_variant_ids);
+    setEditing(false);
+    setError(null);
+  }
+
+  return (
+    <div className="mt-3 rounded-md border border-dashed border-border bg-muted/20 p-2.5 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium uppercase tracking-wide text-muted-foreground">
+          Visible:
+        </span>
+        <span className="text-foreground">{summary}</span>
+        {!editing ? (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="ml-auto rounded-md border border-border bg-background px-2 py-0.5 font-medium hover:bg-muted"
+          >
+            Cambiar
+          </button>
+        ) : null}
+      </div>
+      {editing ? (
+        <div className="mt-2 space-y-2">
+          <p className="text-muted-foreground">
+            Sin selección = siempre visible. Marca variantes para limitarlo.
+          </p>
+          <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            {variants.map((v) => (
+              <li key={v.id}>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <Checkbox
+                    checked={selected.includes(v.id)}
+                    onChange={() => toggle(v.id)}
+                  />
+                  <span className="truncate">{v.name}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          {error ? <p className="text-destructive">{error}</p> : null}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={pending}
+              className="rounded-md px-2 py-1 font-medium text-muted-foreground hover:text-foreground"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={pending}
+              className="rounded-md bg-primary px-3 py-1 font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            >
+              {pending ? "Guardando..." : "Guardar visibilidad"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -137,7 +273,13 @@ function DeleteFieldButton({
   );
 }
 
-function AddFieldForm({ productId }: { productId: string }) {
+function AddFieldForm({
+  productId,
+  variants,
+}: {
+  productId: string;
+  variants: VariantOption[];
+}) {
   const bound = addCustomizationFieldAction.bind(null, productId);
 
   const [type, setType] = useState<CustomField["type"]>("text");
@@ -145,6 +287,7 @@ function AddFieldForm({ productId }: { productId: string }) {
   const [name, setName] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
   const [optionsText, setOptionsText] = useState("");
+  const [selectedVariantIds, setSelectedVariantIds] = useState<string[]>([]);
 
   const [state, formAction] = useActionState<
     CustomFieldActionState | undefined,
@@ -158,6 +301,7 @@ function AddFieldForm({ productId }: { productId: string }) {
       setName("");
       setNameTouched(false);
       setOptionsText("");
+      setSelectedVariantIds([]);
     }
     return result;
   }, undefined);
@@ -166,6 +310,12 @@ function AddFieldForm({ productId }: { productId: string }) {
     .split(/\r?\n/)
     .map((s) => s.trim())
     .filter(Boolean);
+
+  function toggleVariant(id: string) {
+    setSelectedVariantIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
 
   return (
     <form
@@ -267,6 +417,35 @@ function AddFieldForm({ productId }: { productId: string }) {
               </ul>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {variants.length > 0 ? (
+        <div className="grid gap-1.5">
+          <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+            Visibilidad por variante (opcional)
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Si no marcas ninguna, el campo será visible siempre.
+          </p>
+          <ul className="grid grid-cols-1 gap-1.5 rounded-md border border-border bg-muted/20 p-2.5 sm:grid-cols-2">
+            {variants.map((v) => (
+              <li key={v.id}>
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Checkbox
+                    checked={selectedVariantIds.includes(v.id)}
+                    onChange={() => toggleVariant(v.id)}
+                  />
+                  <span className="truncate">{v.name}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <input
+            type="hidden"
+            name="visible_variant_ids"
+            value={selectedVariantIds.join(",")}
+          />
         </div>
       ) : null}
 

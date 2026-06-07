@@ -77,7 +77,9 @@ export default async function ProductDetailPage({
     product.is_customizable
       ? supabase
           .from("customization_fields")
-          .select("id, type, name, label, required, options, price_delta_rules")
+          .select(
+            "id, type, name, label, required, options, price_delta_rules, visible_variant_ids",
+          )
           .eq("product_id", product.id)
           .order("sort_order")
       : Promise.resolve({ data: [] as const }),

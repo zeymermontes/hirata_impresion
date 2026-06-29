@@ -1,6 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
-import { serverOnlyEnv } from "@/lib/env";
+import { env, serverOnlyEnv } from "@/lib/env";
 import type { GiftCard } from "@/lib/gift-cards";
 
 let cachedClient: Resend | null = null;
@@ -31,8 +31,6 @@ export async function sendEmail(args: {
     return { ok: false, reason: "no_api_key" };
   }
   const { EMAIL_FROM } = serverOnlyEnv();
-  // Surface the exact from/to/subject hitting Resend so we can debug
-  // domain-verification / sandbox issues without guessing.
   console.info(
     `[email] sending → to="${args.to}" from="${EMAIL_FROM}" subject="${args.subject}"`,
   );
@@ -62,19 +60,436 @@ export async function sendEmail(args: {
 }
 
 // ============================================================
-// Gift card delivery email
+// Brand tokens — Hirata: black foreground + yellow accent
+// ============================================================
+// Yellow (#facc15) reads poorly as foreground text on white, so we
+// reserve it for visual elements (stripes, left-borders, code-chip
+// backgrounds, the gift-card balance gradient). Foreground accent
+// text and button backgrounds use black for readability.
+
+const ACCENT_YELLOW = "#facc15";
+const BLACK = "#0a0a0a";
+const CREAM_BG = "#fffbeb";
+const CREAM_BORDER = "#fef3c7";
+
+function siteBase(): string {
+  return env.SITE_URL.replace(/\/$/, "");
+}
+
+/**
+ * Wraps any email body in the brand chrome: white card on cream
+ * background, white logo header with a 3px yellow accent stripe,
+ * footer with country tag + contact links.
+ *
+ * Clients block remote images by default, so we provide alt text plus
+ * a tagline directly underneath so the brand reads either way.
+ */
+function shell(opts: {
+  preheader: string;
+  title: string;
+  bodyHtml: string;
+}): string {
+  const logoUrl = `${siteBase()}/hirata-logo.webp`;
+  const productsUrl = `${siteBase()}/productos`;
+  return `<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>${escapeHtml(opts.title)}</title>
+</head>
+<body style="margin:0;padding:0;background:${CREAM_BG};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:${BLACK};-webkit-font-smoothing:antialiased;">
+  <!-- Preheader (hidden but shown as preview in inbox lists) -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(opts.preheader)}</div>
+
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${CREAM_BG};">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="560" style="max-width:560px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(10,10,10,0.06);">
+
+          <tr>
+            <td align="center" style="padding:32px 24px 16px 24px;background:#ffffff;border-bottom:3px solid ${ACCENT_YELLOW};">
+              <img src="${logoUrl}" width="180" alt="Hirata" style="display:block;max-width:180px;height:auto;margin:0 auto 8px auto;border:0;" />
+              <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:${BLACK};">Hirata · Impresión Digital</p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px 28px;">
+              ${opts.bodyHtml}
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:20px 24px;background:${CREAM_BG};border-top:1px solid ${CREAM_BORDER};text-align:center;">
+              <p style="margin:0 0 6px 0;font-size:12px;color:#6b7280;">Hecho con cariño en México 🇲🇽</p>
+              <p style="margin:0;font-size:11px;color:#9ca3af;">
+                <a href="${productsUrl}" style="color:${BLACK};text-decoration:none;font-weight:600;">hirata.mx</a>
+                · <a href="mailto:hola@hirata.mx" style="color:${BLACK};text-decoration:none;font-weight:600;">hola@hirata.mx</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function button(label: string, href: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto;">
+    <tr>
+      <td align="center" style="border-radius:12px;background:${BLACK};">
+        <a href="${href}" style="display:inline-block;padding:14px 28px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px;letter-spacing:0.02em;">${escapeHtml(label)}</a>
+      </td>
+    </tr>
+  </table>`;
+}
+
+function orderChip(orderShort: string): string {
+  return `<span style="font-family:monospace;background:${CREAM_BG};padding:2px 6px;border-radius:4px;color:${BLACK};font-weight:600;border:1px solid ${CREAM_BORDER};">#${escapeHtml(orderShort)}</span>`;
+}
+
+// ============================================================
+// Welcome — after signup confirmation
+// ============================================================
+
+export async function sendWelcomeEmail(args: {
+  to: string;
+  name: string | null;
+}): Promise<void> {
+  const html = renderWelcomeEmail(args);
+  await sendEmail({
+    to: args.to,
+    subject: "¡Bienvenido a Hirata! ✨",
+    html,
+  });
+}
+
+function renderWelcomeEmail(args: { name: string | null }): string {
+  const greeting = args.name ? `¡Hola ${escapeHtml(args.name)}!` : "¡Hola!";
+  const ctaUrl = `${siteBase()}/productos`;
+
+  const body = `
+    <p style="margin:0 0 6px 0;font-size:15px;color:#525252;">${greeting}</p>
+    <h1 style="margin:0 0 16px 0;font-size:26px;font-weight:800;line-height:1.2;color:${BLACK};">
+      Bienvenido a Hirata 🖨️
+    </h1>
+    <p style="margin:0 0 20px 0;font-size:15px;color:#3f3f46;line-height:1.6;">
+      Gracias por crear tu cuenta. Aquí imprimimos lo que necesitas: tarjetas,
+      stickers, lonas, libretas, gift cards y más — todo con acabados
+      profesionales y entrega rápida.
+    </p>
+
+    <div style="margin:24px 0;padding:20px;background:${CREAM_BG};border-radius:12px;border-left:4px solid ${ACCENT_YELLOW};">
+      <p style="margin:0 0 8px 0;font-size:14px;font-weight:700;color:${BLACK};">¿Por dónde empezar?</p>
+      <p style="margin:0;font-size:13px;color:#525252;line-height:1.5;">Explora el catálogo, personaliza tu diseño en vivo y pídelo en minutos.</p>
+    </div>
+
+    ${button("Explorar productos", ctaUrl)}
+
+    <p style="margin:24px 0 0 0;font-size:13px;color:#71717a;line-height:1.5;">
+      Si tienes alguna duda, respóndenos a este correo.
+    </p>
+  `;
+
+  return shell({
+    preheader: "Empieza a imprimir en minutos",
+    title: "Bienvenido a Hirata",
+    bodyHtml: body,
+  });
+}
+
+// ============================================================
+// Order paid
+// ============================================================
+
+export type OrderEmailItem = {
+  product_name: string;
+  variant_name: string | null;
+  quantity: number;
+  unit_price: number;
+};
+
+export async function sendOrderPaidEmail(args: {
+  to: string;
+  name: string | null;
+  orderId: string;
+  items: OrderEmailItem[];
+  total: number;
+  fulfillment: "ship" | "pickup" | "digital";
+}): Promise<void> {
+  const html = renderOrderPaidEmail(args);
+  await sendEmail({
+    to: args.to,
+    subject: `¡Recibimos tu pago! Pedido #${args.orderId.slice(0, 8)}`,
+    html,
+  });
+}
+
+function renderOrderPaidEmail(args: {
+  name: string | null;
+  orderId: string;
+  items: OrderEmailItem[];
+  total: number;
+  fulfillment: "ship" | "pickup" | "digital";
+}): string {
+  const greeting = args.name ? `¡Gracias ${escapeHtml(args.name)}!` : "¡Gracias!";
+  const orderShort = args.orderId.slice(0, 8);
+  const orderUrl = `${siteBase()}/mi-cuenta/pedidos/${args.orderId}`;
+
+  const rows = args.items
+    .map(
+      (it) => `<tr>
+        <td style="padding:12px 0;border-bottom:1px solid ${CREAM_BORDER};">
+          <p style="margin:0;font-size:14px;color:${BLACK};font-weight:600;">${escapeHtml(it.product_name)}</p>
+          ${it.variant_name ? `<p style="margin:2px 0 0 0;font-size:12px;color:#71717a;">${escapeHtml(it.variant_name)}</p>` : ""}
+          <p style="margin:4px 0 0 0;font-size:12px;color:#9ca3af;">${it.quantity} × ${formatPeso(Number(it.unit_price))}</p>
+        </td>
+        <td style="padding:12px 0;border-bottom:1px solid ${CREAM_BORDER};text-align:right;font-weight:700;color:${BLACK};font-size:14px;">
+          ${formatPeso(Number(it.unit_price) * Number(it.quantity))}
+        </td>
+      </tr>`,
+    )
+    .join("");
+
+  const nextStep =
+    args.fulfillment === "digital"
+      ? "Como es entrega digital, recibirás cada ítem directamente por correo en los próximos minutos."
+      : args.fulfillment === "pickup"
+        ? "Tu pedido entró en producción. Te avisamos cuando esté listo para recoger en sucursal."
+        : "Tu pedido entró en producción. Te enviaremos otro correo con el número de guía cuando salga a tu domicilio.";
+
+  const body = `
+    <p style="margin:0 0 6px 0;font-size:15px;color:#525252;">${greeting}</p>
+    <h1 style="margin:0 0 8px 0;font-size:24px;font-weight:800;line-height:1.2;color:${BLACK};">
+      Recibimos tu pago ✅
+    </h1>
+    <p style="margin:0 0 24px 0;font-size:14px;color:#3f3f46;line-height:1.5;">
+      Pedido ${orderChip(orderShort)}
+    </p>
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-bottom:8px;">
+      ${rows}
+      <tr>
+        <td style="padding:16px 0 0 0;font-size:13px;color:#525252;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Total</td>
+        <td style="padding:16px 0 0 0;font-size:18px;font-weight:800;text-align:right;color:${BLACK};">${formatPeso(args.total)}</td>
+      </tr>
+    </table>
+
+    <p style="margin:24px 0 0 0;font-size:14px;color:#3f3f46;line-height:1.5;">${nextStep}</p>
+
+    ${button("Ver mi pedido", orderUrl)}
+  `;
+
+  return shell({
+    preheader: `Pago confirmado — pedido #${orderShort}`,
+    title: "Pago recibido",
+    bodyHtml: body,
+  });
+}
+
+// ============================================================
+// Order shipped
+// ============================================================
+
+export async function sendOrderShippedEmail(args: {
+  to: string;
+  name: string | null;
+  orderId: string;
+  carrier: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+}): Promise<void> {
+  const html = renderOrderShippedEmail(args);
+  await sendEmail({
+    to: args.to,
+    subject: `📦 ¡Tu pedido va en camino! #${args.orderId.slice(0, 8)}`,
+    html,
+  });
+}
+
+function renderOrderShippedEmail(args: {
+  name: string | null;
+  orderId: string;
+  carrier: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
+}): string {
+  const greeting = args.name ? `¡Hola ${escapeHtml(args.name)}!` : "¡Hola!";
+  const orderShort = args.orderId.slice(0, 8);
+  const orderUrl = `${siteBase()}/mi-cuenta/pedidos/${args.orderId}`;
+
+  const trackingBlock = args.trackingNumber
+    ? `<div style="margin:24px 0;padding:20px;background:${CREAM_BG};border-radius:12px;border-left:4px solid ${ACCENT_YELLOW};">
+        ${args.carrier ? `<p style="margin:0 0 6px 0;font-size:12px;font-weight:700;color:${BLACK};letter-spacing:0.06em;text-transform:uppercase;">Paquetería</p>
+        <p style="margin:0 0 12px 0;font-size:16px;font-weight:700;color:${BLACK};">${escapeHtml(args.carrier)}</p>` : ""}
+        <p style="margin:0 0 6px 0;font-size:12px;font-weight:700;color:${BLACK};letter-spacing:0.06em;text-transform:uppercase;">Número de guía</p>
+        <p style="margin:0;font-family:monospace;font-size:18px;font-weight:700;color:${BLACK};letter-spacing:0.04em;">${escapeHtml(args.trackingNumber)}</p>
+      </div>`
+    : "";
+
+  const body = `
+    <p style="margin:0 0 6px 0;font-size:15px;color:#525252;">${greeting}</p>
+    <h1 style="margin:0 0 8px 0;font-size:24px;font-weight:800;line-height:1.2;color:${BLACK};">
+      Tu pedido salió 📦
+    </h1>
+    <p style="margin:0 0 16px 0;font-size:14px;color:#3f3f46;line-height:1.5;">
+      Pedido ${orderChip(orderShort)} ya está en camino a tu domicilio.
+    </p>
+
+    ${trackingBlock}
+
+    ${args.trackingUrl ? button("Rastrear envío", args.trackingUrl) : button("Ver mi pedido", orderUrl)}
+
+    <p style="margin:24px 0 0 0;font-size:13px;color:#71717a;line-height:1.5;">
+      Si tienes alguna duda con tu envío, respóndenos a este correo.
+    </p>
+  `;
+
+  return shell({
+    preheader: `Tu pedido va en camino${args.trackingNumber ? ` — guía ${args.trackingNumber}` : ""}`,
+    title: "Tu pedido va en camino",
+    bodyHtml: body,
+  });
+}
+
+// ============================================================
+// Order ready for pickup — branch hours rendered by caller
+// ============================================================
+
+export async function sendOrderReadyEmail(args: {
+  to: string;
+  name: string | null;
+  orderId: string;
+  branchName: string | null;
+  branchAddress: string | null;
+  branchHours: string | null;
+}): Promise<void> {
+  const html = renderOrderReadyEmail(args);
+  await sendEmail({
+    to: args.to,
+    subject: `🎁 Tu pedido está listo para recoger #${args.orderId.slice(0, 8)}`,
+    html,
+  });
+}
+
+function renderOrderReadyEmail(args: {
+  name: string | null;
+  orderId: string;
+  branchName: string | null;
+  branchAddress: string | null;
+  branchHours: string | null;
+}): string {
+  const greeting = args.name ? `¡Hola ${escapeHtml(args.name)}!` : "¡Hola!";
+  const orderShort = args.orderId.slice(0, 8);
+  const orderUrl = `${siteBase()}/mi-cuenta/pedidos/${args.orderId}`;
+
+  const branchBlock =
+    args.branchName || args.branchAddress
+      ? `<div style="margin:24px 0;padding:20px;background:${CREAM_BG};border-radius:12px;border-left:4px solid ${ACCENT_YELLOW};">
+          ${args.branchName ? `<p style="margin:0 0 6px 0;font-size:12px;font-weight:700;color:${BLACK};letter-spacing:0.06em;text-transform:uppercase;">Sucursal</p>
+          <p style="margin:0 0 12px 0;font-size:16px;font-weight:700;color:${BLACK};">${escapeHtml(args.branchName)}</p>` : ""}
+          ${args.branchAddress ? `<p style="margin:0 0 12px 0;font-size:14px;color:#3f3f46;line-height:1.5;">${escapeHtml(args.branchAddress)}</p>` : ""}
+          ${args.branchHours ? `<p style="margin:0 0 4px 0;font-size:11px;font-weight:700;color:${BLACK};letter-spacing:0.06em;text-transform:uppercase;">Horario</p>
+          <p style="margin:0;font-size:13px;color:#525252;">${escapeHtml(args.branchHours)}</p>` : ""}
+        </div>`
+      : "";
+
+  const body = `
+    <p style="margin:0 0 6px 0;font-size:15px;color:#525252;">${greeting}</p>
+    <h1 style="margin:0 0 8px 0;font-size:24px;font-weight:800;line-height:1.2;color:${BLACK};">
+      ¡Tu pedido está listo! 🎁
+    </h1>
+    <p style="margin:0 0 16px 0;font-size:14px;color:#3f3f46;line-height:1.5;">
+      Pedido ${orderChip(orderShort)} ya está listo para que lo recojas.
+    </p>
+
+    ${branchBlock}
+
+    ${button("Ver mi pedido", orderUrl)}
+
+    <p style="margin:24px 0 0 0;font-size:13px;color:#71717a;line-height:1.5;">
+      Lleva una identificación al recoger. Si necesitas que vaya alguien más en tu nombre, respóndenos a este correo.
+    </p>
+  `;
+
+  return shell({
+    preheader: `Tu pedido #${orderShort} está listo para recoger`,
+    title: "Tu pedido está listo",
+    bodyHtml: body,
+  });
+}
+
+// ============================================================
+// Gift card — to the recipient
 // ============================================================
 
 export async function sendGiftCardEmail(card: GiftCard): Promise<void> {
   if (!card.recipient_email) return;
-  const subject = `${card.sender_name ? `${card.sender_name} te envió` : "Tienes"} una gift card de Hirata`;
+  const subject = `${
+    card.sender_name ? `${card.sender_name} te envió` : "Tienes"
+  } una gift card de Hirata`;
   const html = renderGiftCardEmail(card);
   await sendEmail({ to: card.recipient_email, subject, html });
 }
 
+function renderGiftCardEmail(card: GiftCard): string {
+  const amountFmt = formatPeso(card.initial_amount);
+  const expires = card.expires_at
+    ? new Date(card.expires_at).toLocaleDateString("es-MX", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : null;
+  const greeting = card.recipient_name
+    ? `¡Hola ${escapeHtml(card.recipient_name)}!`
+    : "¡Hola!";
+  const sender = card.sender_name
+    ? `<p style="margin:0 0 16px 0;font-size:14px;color:#525252;">De parte de <strong style="color:${BLACK};">${escapeHtml(card.sender_name)}</strong>.</p>`
+    : "";
+  const message = card.message
+    ? `<blockquote style="margin:20px 0;padding:14px 18px;border-left:4px solid ${ACCENT_YELLOW};background:${CREAM_BG};color:#3f3f46;font-style:italic;font-size:14px;border-radius:0 8px 8px 0;">${escapeHtml(card.message)}</blockquote>`
+    : "";
+  const expiresLine = expires
+    ? `<p style="margin:8px 0 0 0;font-size:12px;color:#71717a;text-align:center;">Vigencia hasta el ${expires}</p>`
+    : "";
+
+  const productsUrl = `${siteBase()}/productos`;
+
+  const body = `
+    <p style="margin:0 0 6px 0;font-size:15px;color:#525252;">${greeting}</p>
+    <h1 style="margin:0 0 16px 0;font-size:26px;font-weight:800;line-height:1.2;color:${BLACK};">Tienes una gift card 🎁</h1>
+    ${sender}
+    ${message}
+
+    <div style="margin:28px 0;padding:24px 20px;border-radius:16px;background:linear-gradient(135deg,${ACCENT_YELLOW} 0%,#eab308 100%);color:${BLACK};text-align:center;box-shadow:0 8px 24px rgba(250,204,21,0.3);">
+      <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;">Saldo disponible</p>
+      <p style="margin:8px 0 18px 0;font-size:42px;font-weight:800;line-height:1;">${amountFmt}</p>
+      <p style="margin:0;font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;">Tu código</p>
+      <p style="margin:6px 0 0 0;font-family:'Courier New',monospace;font-size:22px;font-weight:700;letter-spacing:0.08em;">${escapeHtml(card.code)}</p>
+    </div>
+
+    ${button("Usar mi gift card", productsUrl)}
+
+    <p style="margin:16px 0 0 0;font-size:14px;color:#3f3f46;line-height:1.5;">
+      Aplica el código en el checkout. Puedes usarlo en varios pedidos hasta agotar el saldo.
+    </p>
+    ${expiresLine}
+  `;
+
+  return shell({
+    preheader: `Saldo de ${amountFmt} — código ${card.code}`,
+    title: "Tu gift card",
+    bodyHtml: body,
+  });
+}
+
 // ============================================================
-// Buyer confirmation — sent to the customer who *bought* the gift cards
-// once they've gone out (either by email or queued for physical shipping).
+// Gift card — to the buyer, after their order pays
 // ============================================================
 
 export type BuyerGiftCardIssued = {
@@ -106,11 +521,12 @@ function renderBuyerConfirmationEmail(args: {
   cards: BuyerGiftCardIssued[];
 }): string {
   const greeting = args.buyerName
-    ? `¡Hola ${escapeHtml(args.buyerName)}!`
-    : "¡Hola!";
+    ? `¡Gracias ${escapeHtml(args.buyerName)}!`
+    : "¡Gracias!";
   const total = args.cards.reduce((s, c) => s + Number(c.amount), 0);
   const totalFmt = formatPeso(total);
   const orderShort = args.orderId.slice(0, 8);
+  const single = args.cards.length === 1;
 
   const rows = args.cards
     .map((c) => {
@@ -120,82 +536,65 @@ function renderBuyerConfirmationEmail(args: {
           ? escapeHtml(c.recipient_email)
           : "destinatario";
       const where = c.recipient_email
-        ? `<span style="color:#71717a;">(${escapeHtml(c.recipient_email)})</span>`
+        ? `<br><span style="color:#9ca3af;font-size:12px;">${escapeHtml(c.recipient_email)}</span>`
         : "";
       const channel =
         c.delivery_method === "physical"
-          ? "Tarjeta física"
-          : "Por correo electrónico";
+          ? "🚚 Tarjeta física"
+          : "✉️ Por correo electrónico";
       return `<tr>
-        <td style="padding:10px 0;border-bottom:1px solid #f4f4f5;">
-          <p style="margin:0;font-size:14px;color:#0a0a0a;">
-            Para <strong>${who}</strong> ${where}
-          </p>
-          <p style="margin:2px 0 0 0;font-size:12px;color:#71717a;">${channel}</p>
+        <td style="padding:14px 0;border-bottom:1px solid ${CREAM_BORDER};">
+          <p style="margin:0;font-size:14px;color:${BLACK};font-weight:600;">${who}</p>
+          ${where}
+          <p style="margin:4px 0 0 0;font-size:11px;color:${BLACK};font-weight:600;letter-spacing:0.04em;">${channel}</p>
         </td>
-        <td style="padding:10px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:600;color:#0a0a0a;">
+        <td style="padding:14px 0;border-bottom:1px solid ${CREAM_BORDER};text-align:right;font-weight:700;color:${BLACK};font-size:15px;">
           ${formatPeso(Number(c.amount))}
         </td>
       </tr>`;
     })
     .join("");
 
-  // Tailor the closing copy: when there's a physical card, the admin still
-  // needs to ship it — say so so the buyer doesn't think it's already
-  // arrived.
   const hasPhysical = args.cards.some((c) => c.delivery_method === "physical");
   const closing = hasPhysical
-    ? "Las tarjetas digitales ya salieron al correo del destinatario. La(s) tarjeta(s) física(s) se preparan y envían en los próximos días."
-    : "Las gift cards ya salieron al correo del destinatario.";
+    ? "Las tarjetas digitales ya salieron al correo del destinatario. Las físicas se preparan y envían en los próximos días."
+    : single
+      ? "Ya salió al correo del destinatario."
+      : "Ya salieron al correo de cada destinatario.";
 
-  return `<!doctype html>
-<html lang="es">
-<body style="margin:0;padding:24px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0a0a0a;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="560" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-    <tr>
-      <td style="background:#0a0a0a;padding:20px 24px;color:#ffffff;">
-        <p style="margin:0;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#facc15;">Hirata Impresión Digital</p>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding:32px 24px;">
-        <p style="margin:0 0 6px 0;font-size:14px;color:#525252;">${greeting}</p>
-        <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:800;line-height:1.3;">
-          ${
-            args.cards.length === 1
-              ? "Tu gift card ya está en camino"
-              : "Tus gift cards ya están en camino"
-          }
-        </h1>
-        <p style="margin:0 0 20px 0;font-size:14px;color:#3f3f46;">
-          Gracias por tu compra. Aquí están los detalles de lo que enviamos:
-        </p>
+  const body = `
+    <p style="margin:0 0 6px 0;font-size:15px;color:#525252;">${greeting}</p>
+    <h1 style="margin:0 0 16px 0;font-size:24px;font-weight:800;line-height:1.2;color:${BLACK};">
+      ${single ? "Tu gift card ya está en camino" : "Tus gift cards ya están en camino"}
+    </h1>
+    <p style="margin:0 0 24px 0;font-size:14px;color:#3f3f46;line-height:1.5;">
+      Gracias por tu compra. Aquí están los detalles de lo que enviamos:
+    </p>
 
-        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-bottom:16px;">
-          ${rows}
-          <tr>
-            <td style="padding:12px 0 0 0;font-size:13px;color:#525252;">Total</td>
-            <td style="padding:12px 0 0 0;font-size:16px;font-weight:700;text-align:right;color:#0a0a0a;">${totalFmt}</td>
-          </tr>
-        </table>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;margin-bottom:8px;">
+      ${rows}
+      <tr>
+        <td style="padding:16px 0 0 0;font-size:13px;color:#525252;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">Total</td>
+        <td style="padding:16px 0 0 0;font-size:18px;font-weight:800;text-align:right;color:${BLACK};">${totalFmt}</td>
+      </tr>
+    </table>
 
-        <p style="margin:8px 0 0 0;font-size:13px;color:#3f3f46;">${closing}</p>
-        <p style="margin:16px 0 0 0;font-size:12px;color:#71717a;">
-          Pedido <span style="font-family:monospace;">#${orderShort}</span>.
-          Si tienes cualquier duda, respóndenos a este correo y con gusto te
-          ayudamos.
-        </p>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #e4e4e7;color:#71717a;font-size:11px;">
-        Hirata Impresión Digital · hola@hirata.mx
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+    <p style="margin:20px 0 0 0;font-size:14px;color:#3f3f46;line-height:1.5;">${closing}</p>
+    <p style="margin:16px 0 0 0;font-size:12px;color:#71717a;">
+      Pedido ${orderChip(orderShort)}
+    </p>
+  `;
+
+  return shell({
+    preheader: `${single ? "Tu gift card" : `${args.cards.length} gift cards`} por ${totalFmt}`,
+    title: "Confirmación de tu pedido",
+    bodyHtml: body,
+  });
 }
+
+// ============================================================
+// Utilities
+// ============================================================
 
 function formatPeso(n: number): string {
   return new Intl.NumberFormat("es-MX", {
@@ -203,73 +602,6 @@ function formatPeso(n: number): string {
     currency: "MXN",
     minimumFractionDigits: 2,
   }).format(n);
-}
-
-function renderGiftCardEmail(card: GiftCard): string {
-  const amountFmt = new Intl.NumberFormat("es-MX", {
-    style: "currency",
-    currency: "MXN",
-    minimumFractionDigits: 2,
-  }).format(card.initial_amount);
-  const expires = card.expires_at
-    ? new Date(card.expires_at).toLocaleDateString("es-MX", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric",
-      })
-    : null;
-  const greeting = card.recipient_name
-    ? `¡Hola ${escapeHtml(card.recipient_name)}!`
-    : "¡Hola!";
-  const sender = card.sender_name
-    ? `<p style="margin:0 0 16px 0;color:#525252;">De parte de <strong>${escapeHtml(card.sender_name)}</strong>.</p>`
-    : "";
-  const message = card.message
-    ? `<blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #facc15;background:#fffbeb;color:#3f3f46;font-style:italic;">${escapeHtml(card.message)}</blockquote>`
-    : "";
-  const expiresLine = expires
-    ? `<p style="margin:8px 0 0 0;font-size:12px;color:#71717a;">Vigencia: hasta el ${expires}.</p>`
-    : "";
-
-  return `<!doctype html>
-<html lang="es">
-<body style="margin:0;padding:24px;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0a0a0a;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="560" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-    <tr>
-      <td style="background:#0a0a0a;padding:20px 24px;color:#ffffff;">
-        <p style="margin:0;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#facc15;">Hirata Impresión Digital</p>
-      </td>
-    </tr>
-    <tr>
-      <td style="padding:32px 24px;">
-        <p style="margin:0 0 8px 0;font-size:14px;color:#525252;">${greeting}</p>
-        <h1 style="margin:0 0 16px 0;font-size:24px;font-weight:800;line-height:1.2;">Tienes una gift card</h1>
-        ${sender}
-        ${message}
-
-        <div style="margin:24px 0;padding:20px;border-radius:12px;background:#facc15;color:#0a0a0a;text-align:center;">
-          <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;">Saldo disponible</p>
-          <p style="margin:6px 0 16px 0;font-size:36px;font-weight:800;line-height:1;">${amountFmt}</p>
-          <p style="margin:0;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">Código</p>
-          <p style="margin:4px 0 0 0;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:0.08em;">${escapeHtml(card.code)}</p>
-        </div>
-
-        <p style="margin:16px 0 0 0;font-size:14px;color:#3f3f46;">
-          Usa este código en el checkout de
-          <a href="https://hirata.mx/productos" style="color:#facc15;text-decoration:underline;font-weight:600;">hirata.mx</a>
-          para aplicar el saldo a tu compra. Puedes usarlo en varios pedidos hasta agotarlo.
-        </p>
-        ${expiresLine}
-      </td>
-    </tr>
-    <tr>
-      <td style="padding:16px 24px;background:#fafafa;border-top:1px solid #e4e4e7;color:#71717a;font-size:11px;">
-        Si no esperabas este correo, ignóralo. La gift card solo puede usarla quien tenga el código.
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
 }
 
 function escapeHtml(s: string): string {

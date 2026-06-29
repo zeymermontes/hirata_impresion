@@ -5,6 +5,14 @@ function required(name: string, value: string | undefined): string {
   return value;
 }
 
+// Emails and webhooks need an absolute URL with protocol. If the env
+// var was set without one, prepend https:// so we don't accidentally
+// produce broken `://hirata.mx/...` links.
+function normalizeSiteUrl(raw: string | undefined): string {
+  if (!raw?.trim()) return "http://localhost:3000";
+  return /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+}
+
 export const env = {
   SUPABASE_URL: required(
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -14,7 +22,7 @@ export const env = {
     "NEXT_PUBLIC_SUPABASE_ANON_KEY",
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   ),
-  SITE_URL: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
+  SITE_URL: normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL),
   MERCADOPAGO_PUBLIC_KEY: process.env.NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY ?? "",
 };
 

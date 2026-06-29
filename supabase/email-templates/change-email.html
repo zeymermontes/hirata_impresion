@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Confirma tu nuevo correo · Hirata</title>
+</head>
+<body style="margin:0;padding:0;background:#fffbeb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#0a0a0a;-webkit-font-smoothing:antialiased;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Verifica el cambio de correo</div>
+
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#fffbeb;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" width="560" style="max-width:560px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(10,10,10,0.06);">
+
+          <tr>
+            <td align="center" style="padding:32px 24px 16px 24px;background:#ffffff;border-bottom:3px solid #facc15;">
+              <img src="https://hirata.mx/hirata-logo.webp" width="180" alt="Hirata" style="display:block;max-width:180px;height:auto;margin:0 auto 8px auto;border:0;" />
+              <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#0a0a0a;">Hirata · Impresión Digital</p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:32px 28px;">
+              <p style="margin:0 0 6px 0;font-size:15px;color:#525252;">¡Hola!</p>
+              <h1 style="margin:0 0 16px 0;font-size:26px;font-weight:800;line-height:1.2;color:#0a0a0a;">Confirma tu nuevo correo ✉️</h1>
+              <p style="margin:0 0 20px 0;font-size:15px;color:#3f3f46;line-height:1.6;">
+                Recibimos una solicitud para cambiar el correo de tu cuenta a <strong>{{ .NewEmail }}</strong>. Confirma con el botón si fuiste tú.
+              </p>
+
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto;">
+                <tr>
+                  <td align="center" style="border-radius:12px;background:#0a0a0a;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 28px;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px;letter-spacing:0.02em;">Confirmar nuevo correo</a>
+                  </td>
+                </tr>
+              </table>
+
+              <div style="margin:20px 0;padding:14px 18px;border-left:4px solid #facc15;background:#fffbeb;border-radius:0 8px 8px 0;">
+                <p style="margin:0;font-size:13px;color:#3f3f46;line-height:1.5;">Si no fuiste tú, ignora este correo. Tu correo actual sigue activo.</p>
+              </div>
+
+              <p style="margin:24px 0 0 0;font-size:12px;color:#71717a;line-height:1.5;">Si el botón no funciona, copia y pega:</p>
+              <p style="margin:6px 0 0 0;font-size:11px;color:#9ca3af;word-break:break-all;">
+                <a href="{{ .ConfirmationURL }}" style="color:#0a0a0a;text-decoration:none;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:20px 24px;background:#fffbeb;border-top:1px solid #fef3c7;text-align:center;">
+              <p style="margin:0 0 6px 0;font-size:12px;color:#6b7280;">Hecho con cariño en México 🇲🇽</p>
+              <p style="margin:0;font-size:11px;color:#9ca3af;">
+                <a href="https://hirata.mx" style="color:#0a0a0a;text-decoration:none;font-weight:600;">hirata.mx</a>
+                · <a href="mailto:hola@hirata.mx" style="color:#0a0a0a;text-decoration:none;font-weight:600;">hola@hirata.mx</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

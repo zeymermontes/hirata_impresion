@@ -132,6 +132,29 @@ export async function updateOrderStatusAction(
       }
     }
 
+    // Fire customer email on real status transitions only. Imported
+    // dynamically so the email module isn't pulled into every admin
+    // response cold-start. Fire-and-forget so a slow Resend call doesn't
+    // make the admin form feel laggy.
+    if (previousStatus !== parsed.data.status) {
+      const newStatus = parsed.data.status;
+      const { notifyOrderPaid, notifyOrderShipped, notifyOrderReady } =
+        await import("@/lib/order-notifications");
+      if (newStatus === "paid" && becomingPaid) {
+        notifyOrderPaid(orderId).catch((e) =>
+          console.error("[admin/pedidos] paid notify failed:", e),
+        );
+      } else if (newStatus === "shipped") {
+        notifyOrderShipped(orderId).catch((e) =>
+          console.error("[admin/pedidos] shipped notify failed:", e),
+        );
+      } else if (newStatus === "ready") {
+        notifyOrderReady(orderId).catch((e) =>
+          console.error("[admin/pedidos] ready notify failed:", e),
+        );
+      }
+    }
+
     revalidatePath("/admin/pedidos");
     revalidatePath(`/admin/pedidos/${orderId}`);
     revalidatePath("/mi-cuenta/pedidos");

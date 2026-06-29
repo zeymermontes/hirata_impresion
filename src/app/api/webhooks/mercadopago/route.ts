@@ -144,6 +144,16 @@ export async function POST(req: NextRequest) {
       changed_by_user_id: null,
       source: "mp_webhook",
     });
+    // Fire the customer email — only on the real transition so MP
+    // retrying this webhook with the same approved status doesn't
+    // re-mail. Fire-and-forget so a slow Resend send can't make MP
+    // think the webhook timed out.
+    if (newOrderStatus === "paid") {
+      const { notifyOrderPaid } = await import("@/lib/order-notifications");
+      notifyOrderPaid(String(orderId)).catch((e) =>
+        console.error("[mp/webhook] paid notify failed:", e),
+      );
+    }
   }
 
   // On approval: (1) redeem any gift card the customer reserved at checkout

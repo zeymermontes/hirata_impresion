@@ -55,7 +55,7 @@ export default async function CheckoutPage() {
       .order("created_at", { ascending: false }),
     supabase
       .from("branches")
-      .select("id, name, address, city, hours")
+      .select("id, name, address, city, hours, hours_schedule")
       .eq("active", true)
       .order("name"),
     cart.supabase

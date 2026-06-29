@@ -113,6 +113,7 @@ export interface Database {
           city: string;
           phone: string | null;
           hours: string | null;
+          hours_schedule: Json;
           active: boolean;
           created_at: string;
         },
@@ -123,6 +124,7 @@ export interface Database {
           city: string;
           phone?: string | null;
           hours?: string | null;
+          hours_schedule?: Json;
           active?: boolean;
           created_at?: string;
         }

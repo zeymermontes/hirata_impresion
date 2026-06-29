@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Mail, Phone, MessageCircle, Clock, MapPin, ArrowRight } from "lucide-react";
+import { Mail, Phone, MessageCircle, MapPin, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
+import { BranchHoursDisplay } from "@/components/branch-hours-display";
 import { createClient } from "@/lib/supabase/server";
 import { getContactSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
@@ -20,7 +21,7 @@ export default async function ContactPage() {
   const contact = await getContactSettings();
   const { data: branches } = await supabase
     .from("branches")
-    .select("id, name, address, city, phone, hours")
+    .select("id, name, address, city, phone, hours, hours_schedule")
     .eq("active", true)
     .order("name")
     .limit(3);
@@ -96,12 +97,10 @@ export default async function ContactPage() {
                       </a>
                     </p>
                   ) : null}
-                  {b.hours ? (
-                    <p className="flex items-start gap-2 text-muted-foreground">
-                      <Clock className="mt-0.5 h-4 w-4 shrink-0" />
-                      <span>{b.hours}</span>
-                    </p>
-                  ) : null}
+                  <BranchHoursDisplay
+                    scheduleRaw={b.hours_schedule}
+                    legacyHours={b.hours}
+                  />
                 </CardContent>
               </Card>
             ))}

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PromotionsSummary } from "@/app/(storefront)/_components/promotions-summary";
+import { BranchHoursDisplay } from "@/components/branch-hours-display";
 import { GiftCardThumb } from "@/components/gift-card-thumb";
 import {
   PromoCodeInput,
@@ -49,6 +50,7 @@ type Branch = {
   address: string;
   city: string;
   hours: string | null;
+  hours_schedule: unknown;
 };
 
 type CartItem = {
@@ -350,11 +352,12 @@ function ShippingFields({
                     <p className="text-xs text-muted-foreground">
                       {b.address}, {b.city}
                     </p>
-                    {b.hours ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {b.hours}
-                      </p>
-                    ) : null}
+                    <BranchHoursDisplay
+                      scheduleRaw={b.hours_schedule}
+                      legacyHours={b.hours}
+                      compact
+                      className="mt-1"
+                    />
                   </div>
                   {branchId === b.id ? (
                     <Badge variant="default">Elegida</Badge>

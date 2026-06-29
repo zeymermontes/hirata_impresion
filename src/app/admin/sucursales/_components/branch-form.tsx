@@ -12,6 +12,13 @@ import {
   updateBranchAction,
   type BranchActionState,
 } from "@/app/admin/sucursales/actions";
+import { ScheduleEditor } from "@/app/admin/sucursales/_components/schedule-editor";
+import {
+  defaultSchedule,
+  hasAnySlot,
+  parseBranchSchedule,
+  type BranchSchedule,
+} from "@/lib/branch-hours";
 
 type Branch = {
   id: string;
@@ -20,6 +27,7 @@ type Branch = {
   city: string;
   phone: string | null;
   hours: string | null;
+  hours_schedule: unknown;
   active: boolean;
 };
 
@@ -31,6 +39,17 @@ export function BranchForm({ branch }: { branch?: Branch }) {
     BranchActionState | undefined,
     FormData
   >(action, undefined);
+
+  // For an existing branch with no structured schedule yet, start the
+  // editor empty (no defaults) so the admin sees the legacy `hours` text
+  // and decides explicitly. New branches get the Mexican-papelería
+  // defaults so they're not facing seven empty rows.
+  const initialSchedule: BranchSchedule = branch
+    ? (() => {
+        const parsed = parseBranchSchedule(branch.hours_schedule);
+        return hasAnySlot(parsed) ? parsed : defaultSchedule();
+      })()
+    : defaultSchedule();
 
   return (
     <form action={formAction} className="space-y-5">
@@ -78,13 +97,13 @@ export function BranchForm({ branch }: { branch?: Branch }) {
       </div>
 
       <div className="grid gap-2">
-        <Label htmlFor="hours">Horario</Label>
-        <Input
-          id="hours"
-          name="hours"
-          placeholder="Lun-Vie 9:00-19:00 · Sáb 9:00-14:00"
-          defaultValue={branch?.hours ?? ""}
-        />
+        <Label>Horario</Label>
+        <p className="text-xs text-muted-foreground">
+          Define horarios por día. Si la sucursal cierra a comer, agrega
+          un segundo bloque (ej. 9:00–14:00 y 16:00–19:00). Deja vacío
+          un día para marcarlo como cerrado.
+        </p>
+        <ScheduleEditor name="hours_schedule" defaultValue={initialSchedule} />
       </div>
 
       <label className="flex items-center gap-2 text-sm">

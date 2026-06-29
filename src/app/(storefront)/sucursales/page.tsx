@@ -1,6 +1,7 @@
-import { MapPin, Phone, Clock, Store } from "lucide-react";
+import { MapPin, Phone, Store } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/admin/empty-state";
+import { BranchHoursDisplay } from "@/components/branch-hours-display";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata = {
@@ -62,12 +63,10 @@ export default async function BranchesPage() {
                     </a>
                   </p>
                 ) : null}
-                {b.hours ? (
-                  <p className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <Clock className="mt-0.5 h-4 w-4 shrink-0" />
-                    <span>{b.hours}</span>
-                  </p>
-                ) : null}
+                <BranchHoursDisplay
+                  scheduleRaw={b.hours_schedule}
+                  legacyHours={b.hours}
+                />
               </CardContent>
             </Card>
           ))}

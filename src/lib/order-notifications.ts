@@ -4,6 +4,7 @@ import {
   sendOrderPaidEmail,
   sendOrderShippedEmail,
   sendOrderReadyEmail,
+  type BranchScheduleLine,
   type OrderEmailItem,
 } from "@/lib/email";
 
@@ -109,6 +110,7 @@ export async function notifyOrderReady(orderId: string): Promise<void> {
     const admin = createAdminClient();
     let branchName: string | null = null;
     let branchAddress: string | null = null;
+    let branchSchedule: BranchScheduleLine[] | null = null;
     let branchHours: string | null = null;
     if (data.order.branch_id) {
       const { data: branch } = await admin
@@ -117,19 +119,17 @@ export async function notifyOrderReady(orderId: string): Promise<void> {
         .eq("id", data.order.branch_id)
         .maybeSingle();
       if (branch) {
-        // Prefer the structured schedule (rendered as a compact
-        // "Día: rango · Día: rango" single line for inline display).
-        // Falls back to legacy free-form `hours` text if the branch
-        // hasn't been migrated through the new admin editor yet.
+        // Prefer the structured schedule — passed through as a typed
+        // array of weekday lines so the email can render it as a
+        // table. Falls back to the legacy free-form `branches.hours`
+        // text when the branch hasn't been migrated through admin yet.
         const { hasAnySlot, parseBranchSchedule, scheduleAsLines } =
           await import("@/lib/branch-hours");
         branchName = branch.name;
         branchAddress = `${branch.address}, ${branch.city}`;
         const schedule = parseBranchSchedule(branch.hours_schedule);
         if (hasAnySlot(schedule)) {
-          branchHours = scheduleAsLines(schedule)
-            .map((l) => `${l.day}: ${l.value}`)
-            .join(" · ");
+          branchSchedule = scheduleAsLines(schedule);
         } else {
           branchHours = branch.hours;
         }
@@ -141,6 +141,7 @@ export async function notifyOrderReady(orderId: string): Promise<void> {
       orderId: data.order.id,
       branchName,
       branchAddress,
+      branchSchedule,
       branchHours,
     });
   } catch (e) {

@@ -28,6 +28,21 @@ production domain changes, update each template's `<img src=...>` to
 match. Email clients block remote images by default, so the alt text
 ("Hirata") plus the tagline directly under it keep the brand readable.
 
+## No-reply convention + WhatsApp footer
+
+The sending mailbox is a no-reply, so every template's footer points
+customers at WhatsApp instead of asking them to reply. Supabase only
+substitutes its own template variables — it can't inject our
+`site_settings.contact` row — so the WhatsApp number is **hardcoded**
+in each of the 5 HTML files (`+52 55 1234 5678` / `525512345678`). If
+that number changes:
+
+1. Update the contact in `/admin/configuracion` (the Resend-side
+   emails read from `site_settings` and pick up the change without a
+   deploy).
+2. Edit the 5 HTML files in this folder, replace the hardcoded
+   number, and re-paste each into the Supabase dashboard.
+
 ## Why HTML in git when Supabase owns the live copy
 
 - Reviewability: changes to copy / layout go through PR review.

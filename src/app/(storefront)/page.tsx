@@ -539,7 +539,7 @@ function FeaturedProducts({
         <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
           {title ?? "Productos destacados"}
         </h2>
-        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
           {products.map((p) => {
             const imgs = Array.isArray(p.images) ? (p.images as string[]) : [];
             return (
@@ -560,9 +560,9 @@ function FeaturedProducts({
                     <GiftCardThumb showLabel />
                   ) : null}
                 </div>
-                <div className="flex flex-1 flex-col p-4">
-                  <h3 className="font-semibold leading-tight">{p.name}</h3>
-                  <p className="mt-auto pt-2 text-lg font-bold">
+                <div className="flex flex-1 flex-col p-3">
+                  <h3 className="text-sm font-semibold leading-tight">{p.name}</h3>
+                  <p className="mt-auto pt-1.5 text-base font-bold">
                     {p.is_gift_card
                       ? "Elige el monto"
                       : formatMXN(Number(p.base_price))}
